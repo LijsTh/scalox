@@ -1,5 +1,6 @@
 import Expr.*
 import scala.collection.mutable.ArrayBuffer
+import scala.annotation.tailrec
 
 class Parser(private val tokens: ArrayBuffer[Token]):
     private var current: Int = 0
@@ -13,105 +14,68 @@ class Parser(private val tokens: ArrayBuffer[Token]):
             //     throw new RuntimeException("Unexpected token: " + lookAhead().lexeme)
             // expr
 
-    def expression(): Expr = 
-        equality()
+    def expression(): Expr = equality()
 
     // Equality expressions: '==' and '!=' || Comparison expressions
     def equality(): Expr = 
-        var expr = comparison()
-
-        // While the next token is an equality operator, consume it and parse the right-hand side
-        while !isAtEnd() && matchToken(TokenType.BANG_EQUAL, TokenType.EQUAL_EQUAL) do
-            val operator = previous()
-            val right = comparison()
-            expr = BinaryExpr(expr, operator, right)
-        expr
-
+        parseLeftAssociative(comparison, TokenType.BANG_EQUAL, TokenType.EQUAL_EQUAL)
 
     // Comparison expressions: '>', '<', '>=', '<=' || Term expressions
     def comparison(): Expr = 
-        var expr = term()
-
-        // While the next token is a comparison operator, consume it and parse the right-hand side
-        while !isAtEnd() && matchToken(TokenType.GREATER, TokenType.GREATER_EQUAL, TokenType.LESS, TokenType.LESS_EQUAL) do
-            val operator = previous()
-            val right = term()
-            expr = BinaryExpr(expr, operator, right)
-        expr
+        parseLeftAssociative(term, TokenType.GREATER, TokenType.GREATER_EQUAL, TokenType.LESS, TokenType.LESS_EQUAL)
 
     // Term expressions: '+' and '-' || Factor expressions
     def term(): Expr = 
-        var expr = factor()
-
-        // While the next token is a term operator, consume it and parse the right-hand side
-        while !isAtEnd() && matchToken(TokenType.PLUS, TokenType.MINUS) do
-            val operator = previous()
-            val right = factor()
-            expr = BinaryExpr(expr, operator, right)
-        expr
+        parseLeftAssociative(factor, TokenType.PLUS, TokenType.MINUS)
 
     // Factor expressions: '*' and '/' || Unary expressions
     def factor(): Expr = 
-        var expr = unary()
-
-        // While the next token is a factor operator, consume it and parse the right-hand side
-        while !isAtEnd() && matchToken(TokenType.STAR, TokenType.SLASH) do
-            val operator = previous()
-            val right = unary()
-            expr = BinaryExpr(expr, operator, right)
-        expr
+        parseLeftAssociative(unary, TokenType.STAR, TokenType.SLASH, TokenType.PERCENT)
 
     // Unary expressions: '!' and '-' || Primary expressions
     def unary(): Expr = 
-        // Prefix operators: '!' and '-'
-        if matchToken(TokenType.BANG, TokenType.MINUS) then
-            val operator = previous()
-            val right = unary()
-            UnaryExpr(operator, right)
-        else
-            primary()
+        tryConsume(TokenType.BANG, TokenType.MINUS) match
+            case Some(operator) => UnaryExpr(operator, unary())
+            case None => primary()
 
     // Primary expressions: NUMBER, STRING, TRUE, FALSE, NIL, and parenthesized expressions
     def primary (): Expr = 
-        if matchToken(TokenType.FALSE) then
-            LiteralExpr(Some(false))
-        else if matchToken(TokenType.TRUE) then
-            LiteralExpr(Some(true))
-        else if matchToken(TokenType.NIL) then
-            LiteralExpr(None)
-        
-        // Handle literals (numbers and strings)
-        else if matchToken(TokenType.NUMBER, TokenType.STRING) then
-            LiteralExpr(previous().literal)
-        
-        // Handle parenthesized expressions recursively
-        else if matchToken(TokenType.LEFT_PAREN) then
-            val expr = expression()
-            if !matchToken(TokenType.RIGHT_PAREN) then
-                throw new RuntimeException("Expected ')' after expression.")
-            GroupingExpr(expr)
-        else
-            throw new RuntimeException("Expected expression, got '" + lookAhead().lexeme + "' instead.")
+        val token = consume()
+        token.tokenType match
+            case TokenType.FALSE => LiteralExpr(Some(false))
+            case TokenType.TRUE => LiteralExpr(Some(true))
+            case TokenType.NIL => LiteralExpr(None)
+            case TokenType.NUMBER | TokenType.STRING => LiteralExpr(token.literal)
+            case TokenType.LEFT_PAREN => 
+                val expr = expression()
+                tryConsume(TokenType.RIGHT_PAREN) match
+                    case Some(_) => GroupingExpr(expr)
+                    case None => throw new RuntimeException("Expected ')' after expression.")
+            case _ => throw new RuntimeException(s"Expected expression, got '${token.lexeme}' instead.")
 
-
-            
     // HELPER METHODS 
+    private def peek(): Token = 
+        tokens(current)
+
     private def isAtEnd(): Boolean = 
-        return lookAhead().tokenType == TokenType.EOF
+        peek().tokenType == TokenType.EOF
 
-    private def previous(): Token =
-        return tokens(current - 1)
+    private def check(tokenTypes: TokenType*): Boolean = 
+        !isAtEnd() && tokenTypes.contains(peek().tokenType)
 
-    private def lookAhead(): Token = 
-        return tokens(current)
-
-    private def advance(): Token = 
-        val token = lookAhead()
+    private def consume(): Token =
+        val token = peek()
         if !isAtEnd() then
             current += 1
-        return token
+        token
 
-    private def matchToken(tokenTypes: TokenType*): Boolean =
-        val matches = tokenTypes.contains(lookAhead().tokenType)
-        if matches then advance()
-        matches
+    private def parseLeftAssociative(nextLevel: () => Expr, operators: TokenType*): Expr = 
+        @tailrec
+        def loop(left: Expr): Expr = 
+            tryConsume(operators*) match
+                case Some(operator) => loop(BinaryExpr(left, operator, nextLevel()))
+                case None => left
+        loop(nextLevel())
+
+    private def tryConsume(tokenTypes: TokenType*): Option[Token] =
+        if check(tokenTypes*) then Some(consume()) else None
