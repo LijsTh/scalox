@@ -26,6 +26,6 @@ enum Expr:
                     case Some(b: Boolean) => if b then "<TRUE>" else "<FALSE>"
                     case None  => "<NIL>"
             case UnaryExpr(operator, right) => s"(${operator.lexeme} ${right.toString})"
-            case BinaryExpr(left, operator, right) => s"(${operator.lexeme} ${left.toString} ${right.toString})"
+            case BinaryExpr(left, operator, right) => s"(${left.toString} ${operator.lexeme} ${right.toString})"
             case GroupingExpr(expression) => s"(${expression.toString})"
 

@@ -2,7 +2,7 @@ import Expr.*
 import scala.collection.mutable.ArrayBuffer
 import scala.annotation.tailrec
 
-class Parser(private val tokens: ArrayBuffer[Token]):
+class Parser(private val tokens: Array[Token]):
     private var current: Int = 0
 
     def parse(): Expr = 
@@ -11,7 +11,7 @@ class Parser(private val tokens: ArrayBuffer[Token]):
         else 
             expression()
             // if !isAtEnd() then
-            //     throw new RuntimeException("Unexpected token: " + lookAhead().lexeme)
+            //     throw new RuntimeException("Unexpected token: " + peek().lexeme)
             // expr
 
     def expression(): Expr = equality()
