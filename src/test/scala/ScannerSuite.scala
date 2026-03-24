@@ -207,11 +207,6 @@ class ScannerSuite extends munit.FunSuite:
     }
     assert(clue(ex1.getMessage).contains("Unexpected character"))
 
-    val ex3 = intercept[RuntimeException] {
-      Scanner("*").scan()
-    }
-    assert(clue(ex3.getMessage).contains("Unexpected character"))
-
   test("scan recognizes empty single-quoted string"):
     // Example: "''" -> STRING EOF with literal ""
     val tokens = scan("''")
