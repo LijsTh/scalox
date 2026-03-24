@@ -21,7 +21,7 @@ class Scanner(private val source: String):
     private def addToken(tokenType: TokenType): Unit =
         addToken(tokenType, None)
 
-    private def addToken(tokenType: TokenType, literal: Option[TokenLiteralTypes]): Unit =
+    private def addToken(tokenType: TokenType, literal: Option[TokenLiteralType]): Unit =
         val text = lexeme
         tokens += Token(tokenType, text, literal, line)
 

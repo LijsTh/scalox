@@ -55,12 +55,12 @@ object TokenType:
     )
 
 
-type TokenLiteralTypes = String | Double | Boolean 
+type TokenLiteralType = String | Double | Boolean
 
 case class Token(
   tokenType: TokenType,
   lexeme: String,
-  literal: Option[TokenLiteralTypes],
+  literal: Option[TokenLiteralType],
   line: Int
 ):
     override def toString: String =
