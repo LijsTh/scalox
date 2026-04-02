@@ -1,11 +1,64 @@
 import Expr.*
+import Stmt.*
+import scala.collection.mutable.ArrayBuffer
 
-class Interpreter: 
+class Interpreter(globalEnv: Env = new Env()):
+
+    private var currentEnv: Env = globalEnv
 
     // TODO: Handle null to nil (at least in prints) 
-    def interpret(expr: Expr): Unit = 
-        val value = evaluate(expr)
-        println((value))
+    def interpret(statements: ArrayBuffer[Stmt]): Unit = 
+        for stmt <- statements do
+            execute(stmt)
+
+    // STATEMENTS EXECUTIONS ------------------------------------------------
+
+    def execute(stmt: Stmt): Unit = 
+        stmt match 
+            case ExpressionStmt(expr) => executeExpression(ExpressionStmt(expr))
+            case PrintStmt(expr) => executePrint(PrintStmt(expr))
+            case VarDecl(name, initializer) => executeVarDecl(VarDecl(name, initializer))
+            case BlockStmt(statements) => executeBlockStmt(BlockStmt(statements))
+            case IfStmt(condition, thenBranch, elseBranch) => executeIfStmt(IfStmt(condition, thenBranch, elseBranch))
+            case WhileStmt(condition, body) => executeWhileStmt(WhileStmt(condition, body))
+
+
+    def executeExpression(stmt: ExpressionStmt): Unit = 
+        evaluate(stmt.expr)
+
+    def executePrint(stmt: PrintStmt): Unit = 
+        val value = evaluate(stmt.expr)
+        println(value)
+
+    def executeVarDecl(stmt: VarDecl): Unit = 
+        val value = stmt.initializer.map(evaluate).getOrElse(null)
+        currentEnv.define(stmt.name, value)
+
+    def executeBlockStmt(stmt: BlockStmt): Unit = 
+        val newEnv = new Env(Some(currentEnv))
+        executeBlock(stmt.statements, newEnv) 
+            
+    def executeBlock(statements: ArrayBuffer[Stmt], env: Env): Unit = 
+        val previousEnv = currentEnv
+        try
+            currentEnv = env
+            for stmt <- statements do
+                execute(stmt) 
+        finally
+            currentEnv = previousEnv
+
+    def executeIfStmt(stmt: IfStmt): Unit = 
+        if isTruthy(evaluate(stmt.condition)) then 
+            execute(stmt.thenBranch)
+        else 
+            stmt.elseBranch.foreach(execute)
+
+    def executeWhileStmt(stmt: WhileStmt): Unit = 
+        while isTruthy(evaluate(stmt.condition)) do
+            execute(stmt.body)
+    
+
+    // EXPRESSIONS EVALUATIONS ------------------------------------------------
 
     def evaluate(expr: Expr): Any =
         expr match
@@ -13,6 +66,9 @@ class Interpreter:
             case grouping: GroupingExpr => evaluateGrouping(grouping)
             case unary: UnaryExpr => evaluateUnary(unary)
             case binary: BinaryExpr => evaluateBinary(binary)
+            case variable: VariableExpr => evaluateVariable(variable)
+            case assignment: AssignmentExpr => evaluateVariableAssignment(assignment)
+            case logic: LogicExpr => evaluateLogic(logic)
             case null => throw new RuntimeException(s"Unknown expression type: ${expr.getClass.getSimpleName}")
 
     private def evaluateLiteral(literal: LiteralExpr): Any =
@@ -29,7 +85,7 @@ class Interpreter:
                     case d: Double => -d
                     case _ => throw new RuntimeException(s"Operand must be a number for '-' operator.")
             case TokenType.BANG =>
-                !is_truthy(right)
+                !isTruthy(right)
             case _ => throw new RuntimeException(s"Unknown unary operator: ${unary.operator.lexeme}")
 
     private def evaluateBinary(binary: BinaryExpr): Any =
@@ -89,8 +145,24 @@ class Interpreter:
 
             case _ => throw new RuntimeException(s"Unknown binary operator: ${binary.operator}")
 
-    // HELPER METHODS
-    private def is_truthy(value: Any): Boolean =
+    def evaluateVariable(variable: VariableExpr): Any =
+        currentEnv.get(variable.name.lexeme)
+
+    def evaluateVariableAssignment(assignment: AssignmentExpr): Any =
+        val value = evaluate(assignment.value)
+        currentEnv.assign(assignment.name.lexeme, value)
+
+    def evaluateLogic(logic: LogicExpr): Any = 
+        val left = evaluate(logic.left)
+        val shortCircuit = logic.operator.tokenType match
+            case TokenType.OR => isTruthy(left)
+            case TokenType.AND => !isTruthy(left)
+            case _ => throw new RuntimeException(s"Unknown logical operator: ${logic.operator.lexeme}")
+
+        if shortCircuit then left else evaluate(logic.right)
+
+    // HELPER METHODS ---------------------------------------------------------------       
+    private def isTruthy(value: Any): Boolean =
         value match
             case null => false
             case b: Boolean => b

@@ -12,10 +12,14 @@ enum Expr:
     // GROUPING: "(" expression ")"
     case GroupingExpr(expression: Expr)
 
-    /*
-    TODO: 
-        - Add more expression types as needed (call, variable, assignment, logic, postfix, ternary, etc.)
-    */
+    // VARIABLE: identifier;
+    case VariableExpr(name: Token)
+
+    // ASSIGNMENT: identifier "=" expression`
+    case AssignmentExpr(name: Token, value: Expr)
+
+    // LOGIC: expression operator expression -- for "and" and "or" logical operators
+    case LogicExpr(left: Expr, operator: Token, right: Expr)
 
     override def toString(): String =
         this match
@@ -28,4 +32,6 @@ enum Expr:
             case UnaryExpr(operator, right) => s"(${operator.lexeme} ${right.toString})"
             case BinaryExpr(left, operator, right) => s"(${left.toString} ${operator.lexeme} ${right.toString})"
             case GroupingExpr(expression) => s"(${expression.toString})"
-
+            case VariableExpr(name) => s"<${name.lexeme}>"
+            case AssignmentExpr(name, value) => s"<${name.lexeme} = ${value.toString}>"
+            case LogicExpr(left, operator, right) => s"(${left.toString} ${operator.lexeme} ${right.toString})"

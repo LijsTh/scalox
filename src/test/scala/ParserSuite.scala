@@ -1,4 +1,5 @@
 import Expr.*
+import Stmt.*
 import scala.collection.mutable.ArrayBuffer
 
 class ParserSuite extends munit.FunSuite:
@@ -9,7 +10,7 @@ class ParserSuite extends munit.FunSuite:
     Parser(tokens).expression()
 
   // Helper: scan source and call parse() (top-level entry point)
-  private def parseProgram(source: String): Expr =
+  private def parseProgram(source: String): ArrayBuffer[Stmt] =
     val tokens = Array.from(Scanner(source).scan())
     Parser(tokens).parse()
 
@@ -54,10 +55,319 @@ class ParserSuite extends munit.FunSuite:
     assert(expr.isInstanceOf[LiteralExpr])
     assertEquals(expr.asInstanceOf[LiteralExpr].value, None)
 
-  test("parse empty input returns nil via parse()"):
-    val expr = parseProgram("")
+  test("parse empty input returns empty program via parse()"):
+    // Example: "" -> no statements
+    val stmts = parseProgram("")
+    assertEquals(stmts.length, 0)
+
+  // ─── Statements ─────────────────────────────────────────────────────
+
+  test("parse expression statement"):
+    // Example: "123;" -> ExpressionStmt(LiteralExpr(123.0))
+    val stmts = parseProgram("123;")
+    assertEquals(stmts.length, 1)
+    assert(stmts.head.isInstanceOf[ExpressionStmt])
+    val expr = stmts.head.asInstanceOf[ExpressionStmt].expr
     assert(expr.isInstanceOf[LiteralExpr])
-    assertEquals(expr.asInstanceOf[LiteralExpr].value, None)
+    assertEquals(expr.asInstanceOf[LiteralExpr].value, Some(123.0))
+
+  test("parse multiple expression statements"):
+    // Example: "1; 2;" -> two ExpressionStmt
+    val stmts = parseProgram("1; 2;")
+    assertEquals(stmts.length, 2)
+    assert(stmts(0).isInstanceOf[ExpressionStmt])
+    assert(stmts(1).isInstanceOf[ExpressionStmt])
+
+  test("parse print statement"):
+    // Example: "print \"hola\";" -> PrintStmt(LiteralExpr("hola"))
+    val stmts = parseProgram("print \"hola\";")
+    assertEquals(stmts.length, 1)
+    assert(stmts.head.isInstanceOf[PrintStmt])
+    val expr = stmts.head.asInstanceOf[PrintStmt].expr
+    assert(expr.isInstanceOf[LiteralExpr])
+    assertEquals(expr.asInstanceOf[LiteralExpr].value, Some("hola"))
+
+  test("parse variable declaration with initializer"):
+    // Example: "var x = 5;" -> VarDecl("x", Some(LiteralExpr(5.0)))
+    val stmts = parseProgram("var x = 5;")
+    assertEquals(stmts.length, 1)
+    assert(stmts.head.isInstanceOf[VarDecl])
+    val decl = stmts.head.asInstanceOf[VarDecl]
+    assertEquals(decl.name, "x")
+    assert(decl.initializer.nonEmpty)
+    assert(decl.initializer.get.isInstanceOf[LiteralExpr])
+    assertEquals(decl.initializer.get.asInstanceOf[LiteralExpr].value, Some(5.0))
+
+  test("parse variable declaration without initializer"):
+    // Example: "var x;" -> VarDecl("x", None)
+    val stmts = parseProgram("var x;")
+    assertEquals(stmts.length, 1)
+    assert(stmts.head.isInstanceOf[VarDecl])
+    val decl = stmts.head.asInstanceOf[VarDecl]
+    assertEquals(decl.name, "x")
+    assertEquals(decl.initializer, None)
+
+  test("parse empty block statement"):
+    // Example: "{}" -> BlockStmt([])
+    val stmts = parseProgram("{}")
+    assertEquals(stmts.length, 1)
+    assert(stmts.head.isInstanceOf[BlockStmt])
+    val block = stmts.head.asInstanceOf[BlockStmt]
+    assertEquals(block.statements.length, 0)
+
+  test("parse block statement with mixed statements"):
+    // Example: "{ print 1; var x = 2; x; }" -> BlockStmt(PrintStmt, VarDecl, ExpressionStmt)
+    val stmts = parseProgram("{ print 1; var x = 2; x; }")
+    assertEquals(stmts.length, 1)
+    assert(stmts.head.isInstanceOf[BlockStmt])
+    val block = stmts.head.asInstanceOf[BlockStmt]
+    assertEquals(block.statements.length, 3)
+    assert(block.statements(0).isInstanceOf[PrintStmt])
+    assert(block.statements(1).isInstanceOf[VarDecl])
+    assert(block.statements(2).isInstanceOf[ExpressionStmt])
+
+  test("parse nested block statements"):
+    // "{ { var x = 1; } }" -> BlockStmt([BlockStmt([VarDecl])])
+    val stmts = parseProgram("{ { var x = 1; } }")
+    assertEquals(stmts.length, 1)
+    val outer = stmts.head.asInstanceOf[BlockStmt]
+    assertEquals(outer.statements.length, 1)
+    val inner = outer.statements(0).asInstanceOf[BlockStmt]
+    assertEquals(inner.statements.length, 1)
+    assert(inner.statements(0).isInstanceOf[VarDecl])
+
+  test("parse variable declaration with expression initializer"):
+    // "var z = 2 + 3;" -> VarDecl("z", Some(BinaryExpr(+)))
+    val stmts = parseProgram("var z = 2 + 3;")
+    val decl = stmts.head.asInstanceOf[VarDecl]
+    assertEquals(decl.name, "z")
+    assert(decl.initializer.get.isInstanceOf[BinaryExpr])
+
+  test("parse assignment expression statement"):
+    // "x = 7;" -> ExpressionStmt(AssignmentExpr(x, 7))
+    val stmts = parseProgram("x = 7;")
+    assertEquals(stmts.length, 1)
+    val expr = stmts.head.asInstanceOf[ExpressionStmt].expr
+    assert(expr.isInstanceOf[AssignmentExpr])
+    val assign = expr.asInstanceOf[AssignmentExpr]
+    assertEquals(assign.name.lexeme, "x")
+    assert(assign.value.isInstanceOf[LiteralExpr])
+    assertEquals(assign.value.asInstanceOf[LiteralExpr].value, Some(7.0))
+
+  test("parse block with var decl then assignment"):
+    // "{ var a = 1; a = 2; }" -> BlockStmt([VarDecl, ExpressionStmt(AssignmentExpr)])
+    val stmts = parseProgram("{ var a = 1; a = 2; }")
+    val block = stmts.head.asInstanceOf[BlockStmt]
+    assertEquals(block.statements.length, 2)
+    assert(block.statements(0).isInstanceOf[VarDecl])
+    val assignStmt = block.statements(1).asInstanceOf[ExpressionStmt].expr
+    assert(assignStmt.isInstanceOf[AssignmentExpr])
+    assertEquals(assignStmt.asInstanceOf[AssignmentExpr].name.lexeme, "a")
+
+  test("parse variable shadowing across nested blocks"):
+    // "{ var x = 1; { var x = 2; } }" -> two VarDecl named x in nested scopes
+    val stmts = parseProgram("{ var x = 1; { var x = 2; } }")
+    val outer = stmts.head.asInstanceOf[BlockStmt]
+    assert(outer.statements(0).isInstanceOf[VarDecl])
+    val innerBlock = outer.statements(1).asInstanceOf[BlockStmt]
+    assert(innerBlock.statements(0).isInstanceOf[VarDecl])
+    assertEquals(innerBlock.statements(0).asInstanceOf[VarDecl].name, "x")
+
+  test("error: unterminated block"):
+    val ex = intercept[RuntimeException] { parseProgram("{ var x = 1;") }
+    assert(clue(ex.getMessage).contains("Expected '}'"))
+
+  test("error: assignment to undeclared variable parses fine"):
+    // Parser does not check scope — it just produces an AssignmentExpr
+    val stmts = parseProgram("y = 42;")
+    val expr = stmts.head.asInstanceOf[ExpressionStmt].expr
+    assert(expr.isInstanceOf[AssignmentExpr])
+
+  // ─── if statements ──────────────────────────────────────────────────
+
+  test("parse if with then branch only"):
+    // if (true) print 1;
+    val stmts = parseProgram("if (true) print 1;")
+    assertEquals(stmts.length, 1)
+    val ifStmt = stmts.head.asInstanceOf[IfStmt]
+    assert(ifStmt.condition.isInstanceOf[LiteralExpr])
+    assertEquals(ifStmt.condition.asInstanceOf[LiteralExpr].value, Some(true))
+    assert(ifStmt.thenBranch.isInstanceOf[PrintStmt])
+    assertEquals(ifStmt.elseBranch, None)
+
+  test("parse if-else"):
+    // if (true) print 1; else print 2;
+    val stmts = parseProgram("if (true) print 1; else print 2;")
+    val ifStmt = stmts.head.asInstanceOf[IfStmt]
+    assert(ifStmt.thenBranch.isInstanceOf[PrintStmt])
+    assert(ifStmt.elseBranch.nonEmpty)
+    assert(ifStmt.elseBranch.get.isInstanceOf[PrintStmt])
+
+  test("parse if with block body"):
+    // if (true) { print 1; }
+    val stmts = parseProgram("if (true) { print 1; }")
+    val ifStmt = stmts.head.asInstanceOf[IfStmt]
+    assert(ifStmt.thenBranch.isInstanceOf[BlockStmt])
+    assertEquals(ifStmt.thenBranch.asInstanceOf[BlockStmt].statements.length, 1)
+
+  test("parse if-else with block bodies"):
+    val stmts = parseProgram("if (false) { print 1; } else { print 2; }")
+    val ifStmt = stmts.head.asInstanceOf[IfStmt]
+    assert(ifStmt.thenBranch.isInstanceOf[BlockStmt])
+    assert(ifStmt.elseBranch.get.isInstanceOf[BlockStmt])
+
+  test("parse nested if-else (dangling else binds to nearest if)"):
+    // if (a) if (b) print 1; else print 2;
+    // else binds to inner if
+    val stmts = parseProgram("if (true) if (false) print 1; else print 2;")
+    val outer = stmts.head.asInstanceOf[IfStmt]
+    assertEquals(outer.elseBranch, None)
+    val inner = outer.thenBranch.asInstanceOf[IfStmt]
+    assert(inner.elseBranch.nonEmpty)
+
+  test("parse if condition is arbitrary expression"):
+    val stmts = parseProgram("if (1 + 2 > 0) print 1;")
+    val ifStmt = stmts.head.asInstanceOf[IfStmt]
+    assert(ifStmt.condition.isInstanceOf[BinaryExpr])
+
+  test("error: if without '('"):
+    val ex = intercept[RuntimeException] { parseProgram("if true print 1;") }
+    assert(clue(ex.getMessage).contains("Expected '('"))
+
+  test("error: if without ')'"):
+    val ex = intercept[RuntimeException] { parseProgram("if (true print 1;") }
+    assert(clue(ex.getMessage).contains("Expected ')'"))
+
+  // ─── while statements ───────────────────────────────────────────────
+
+  test("parse while statement"):
+    // while (false) print 1;
+    val stmts = parseProgram("while (false) print 1;")
+    assertEquals(stmts.length, 1)
+    val whileStmt = stmts.head.asInstanceOf[WhileStmt]
+    assert(whileStmt.condition.isInstanceOf[LiteralExpr])
+    assertEquals(whileStmt.condition.asInstanceOf[LiteralExpr].value, Some(false))
+    assert(whileStmt.body.isInstanceOf[PrintStmt])
+
+  test("parse while with block body"):
+    val stmts = parseProgram("while (true) { print 1; }")
+    val whileStmt = stmts.head.asInstanceOf[WhileStmt]
+    assert(whileStmt.body.isInstanceOf[BlockStmt])
+
+  test("parse while with compound condition"):
+    val stmts = parseProgram("while (x > 0) print x;")
+    val whileStmt = stmts.head.asInstanceOf[WhileStmt]
+    assert(whileStmt.condition.isInstanceOf[BinaryExpr])
+    assertEquals(whileStmt.condition.asInstanceOf[BinaryExpr].operator.tokenType, TokenType.GREATER)
+
+  test("error: while without '('"):
+    val ex = intercept[RuntimeException] { parseProgram("while true print 1;") }
+    assert(clue(ex.getMessage).contains("Expected '('"))
+
+  test("error: while without ')'"):
+    val ex = intercept[RuntimeException] { parseProgram("while (true print 1;") }
+    assert(clue(ex.getMessage).contains("Expected ')'"))
+
+  // ─── for statements (desugared to while) ────────────────────────────────
+
+  test("for loop desugars to BlockStmt(VarDecl, WhileStmt)"):
+    // for (var i = 0; i < 3; i = i + 1) print i;
+    // -> BlockStmt([VarDecl(i,0), WhileStmt(i<3, BlockStmt([print i, i=i+1]))])
+    val stmts = parseProgram("for (var i = 0; i < 3; i = i + 1) print i;")
+    assertEquals(stmts.length, 1)
+    val outer = stmts.head.asInstanceOf[BlockStmt]
+    assertEquals(outer.statements.length, 2)
+    assert(outer.statements(0).isInstanceOf[VarDecl])
+    assertEquals(outer.statements(0).asInstanceOf[VarDecl].name, "i")
+    val whileStmt = outer.statements(1).asInstanceOf[WhileStmt]
+    assert(whileStmt.condition.isInstanceOf[BinaryExpr])
+    assertEquals(whileStmt.condition.asInstanceOf[BinaryExpr].operator.tokenType, TokenType.LESS)
+    // body is BlockStmt([print i, ExpressionStmt(i=i+1)])
+    val body = whileStmt.body.asInstanceOf[BlockStmt]
+    assertEquals(body.statements.length, 2)
+    assert(body.statements(0).isInstanceOf[PrintStmt])
+    assert(body.statements(1).isInstanceOf[ExpressionStmt])
+    assert(body.statements(1).asInstanceOf[ExpressionStmt].expr.isInstanceOf[AssignmentExpr])
+
+  test("for with expression initializer desugars to BlockStmt"):
+    // for (i = 0; i < 3; i = i + 1) print i;
+    val stmts = parseProgram("for (i = 0; i < 3; i = i + 1) print i;")
+    val outer = stmts.head.asInstanceOf[BlockStmt]
+    assert(outer.statements(0).isInstanceOf[ExpressionStmt])
+    assert(outer.statements(0).asInstanceOf[ExpressionStmt].expr.isInstanceOf[AssignmentExpr])
+    assert(outer.statements(1).isInstanceOf[WhileStmt])
+
+  test("for with no initializer desugars to WhileStmt directly"):
+    // for (; i < 3; i = i + 1) print i;
+    val stmts = parseProgram("for (; i < 3; i = i + 1) print i;")
+    assertEquals(stmts.length, 1)
+    assert(stmts.head.isInstanceOf[WhileStmt])
+
+  test("for with no condition uses true (infinite loop guard)"):
+    // for (var i = 0;; i = i + 1) print i;
+    val stmts = parseProgram("for (var i = 0;; i = i + 1) print i;")
+    val outer = stmts.head.asInstanceOf[BlockStmt]
+    val whileStmt = outer.statements(1).asInstanceOf[WhileStmt]
+    // condition is LiteralExpr(Some(true))
+    assert(whileStmt.condition.isInstanceOf[LiteralExpr])
+    assertEquals(whileStmt.condition.asInstanceOf[LiteralExpr].value, Some(true))
+
+  test("for with no increment: body is not wrapped in extra block"):
+    // for (var i = 0; i < 3;) print i;
+    val stmts = parseProgram("for (var i = 0; i < 3;) print i;")
+    val outer = stmts.head.asInstanceOf[BlockStmt]
+    val whileStmt = outer.statements(1).asInstanceOf[WhileStmt]
+    // body is just PrintStmt, not wrapped
+    assert(whileStmt.body.isInstanceOf[PrintStmt])
+
+  test("for with block body"):
+    val stmts = parseProgram("for (var i = 0; i < 3; i = i + 1) { print i; }")
+    val outer = stmts.head.asInstanceOf[BlockStmt]
+    val whileStmt = outer.statements(1).asInstanceOf[WhileStmt]
+    val body = whileStmt.body.asInstanceOf[BlockStmt]
+    // body block has original block + increment
+    assert(body.statements(0).isInstanceOf[BlockStmt])
+    assert(body.statements(1).isInstanceOf[ExpressionStmt])
+
+  test("error: for without '('"):
+    val ex = intercept[RuntimeException] { parseProgram("for var i = 0; i < 3; i = i+1) print i;") }
+    assert(clue(ex.getMessage).contains("Expected '('"))
+
+  test("error: for missing ';' after condition"):
+    val ex = intercept[RuntimeException] { parseProgram("for (var i = 0; i < 3 i = i+1) print i;") }
+    assert(clue(ex.getMessage).contains("Expected ';' after for loop condition"))
+
+  test("error: for missing ')'"):
+    val ex = intercept[RuntimeException] { parseProgram("for (var i = 0; i < 3; i = i+1 print i;") }
+    assert(clue(ex.getMessage).contains("Expected ')' after for loop clauses"))
+
+  test("error: expression statement without semicolon"):
+    // Example: "123" -> error (missing ';')
+    val ex = intercept[RuntimeException] {
+      parseProgram("123")
+    }
+    assert(clue(ex.getMessage).contains("Expected ';' after expression"))
+
+  test("error: print statement without semicolon"):
+    // Example: "print 1" -> error (missing ';')
+    val ex = intercept[RuntimeException] {
+      parseProgram("print 1")
+    }
+    assert(clue(ex.getMessage).contains("Expected ';' after value to print"))
+
+  test("error: variable declaration without variable name"):
+    // Example: "var = 1;" -> error (missing identifier)
+    val ex = intercept[RuntimeException] {
+      parseProgram("var = 1;")
+    }
+    assert(clue(ex.getMessage).contains("Expected variable name"))
+
+  test("error: variable declaration without semicolon"):
+    // Example: "var x = 1" -> error (missing ';')
+    val ex = intercept[RuntimeException] {
+      parseProgram("var x = 1")
+    }
+    assert(clue(ex.getMessage).contains("Expected ';' after variable declaration"))
 
   // ─── Basic binary expression ───────────────────────────────────────
 
@@ -498,7 +808,7 @@ class ParserSuite extends munit.FunSuite:
     assertEquals(parseExpr("nil").toString, "<NIL>")
 
   test("toString for binary expression"):
-    assertEquals(parseExpr("1 + 2").toString, "(+ <1.0> <2.0>)")
+    assertEquals(parseExpr("1 + 2").toString, "(<1.0> + <2.0>)")
 
   test("toString for unary expression"):
     assertEquals(parseExpr("-1").toString, "(- <1.0>)")
@@ -507,7 +817,7 @@ class ParserSuite extends munit.FunSuite:
     assertEquals(parseExpr("(1)").toString, "(<1.0>)")
 
   test("toString for complex expression"):
-    assertEquals(parseExpr("(1 + 2)").toString, "((+ <1.0> <2.0>))")
+    assertEquals(parseExpr("(1 + 2)").toString, "((<1.0> + <2.0>))")
 
   // ─── Error cases ───────────────────────────────────────────────────
 
@@ -610,4 +920,83 @@ class ParserSuite extends munit.FunSuite:
     assertEquals(bin.operator.tokenType, TokenType.PLUS)
     assertEquals(bin.left.asInstanceOf[LiteralExpr].value, Some(true))
     assertEquals(bin.right.asInstanceOf[LiteralExpr].value, Some(false))
+
+  // ─── Logical operators (and / or) ─────────────────────────────────
+
+  test("parse 'and' produces LogicExpr"):
+    val expr = parseExpr("true and false")
+    assert(expr.isInstanceOf[LogicExpr])
+    val logic = expr.asInstanceOf[LogicExpr]
+    assertEquals(logic.operator.tokenType, TokenType.AND)
+    assertEquals(logic.left.asInstanceOf[LiteralExpr].value, Some(true))
+    assertEquals(logic.right.asInstanceOf[LiteralExpr].value, Some(false))
+
+  test("parse 'or' produces LogicExpr"):
+    val expr = parseExpr("false or true")
+    assert(expr.isInstanceOf[LogicExpr])
+    val logic = expr.asInstanceOf[LogicExpr]
+    assertEquals(logic.operator.tokenType, TokenType.OR)
+    assertEquals(logic.left.asInstanceOf[LiteralExpr].value, Some(false))
+    assertEquals(logic.right.asInstanceOf[LiteralExpr].value, Some(true))
+
+  test("'and' has higher precedence than 'or': a or b and c == a or (b and c)"):
+    // false or true and false -> false or (true and false)
+    val expr = parseExpr("false or true and false")
+    assert(expr.isInstanceOf[LogicExpr])
+    val or = expr.asInstanceOf[LogicExpr]
+    assertEquals(or.operator.tokenType, TokenType.OR)
+    assertEquals(or.left.asInstanceOf[LiteralExpr].value, Some(false))
+    // right side is (true and false)
+    assert(or.right.isInstanceOf[LogicExpr])
+    val and = or.right.asInstanceOf[LogicExpr]
+    assertEquals(and.operator.tokenType, TokenType.AND)
+    assertEquals(and.left.asInstanceOf[LiteralExpr].value, Some(true))
+    assertEquals(and.right.asInstanceOf[LiteralExpr].value, Some(false))
+
+  test("'and' is left-associative: a and b and c == (a and b) and c"):
+    val expr = parseExpr("true and false and true")
+    assert(expr.isInstanceOf[LogicExpr])
+    val right = expr.asInstanceOf[LogicExpr]
+    assertEquals(right.operator.tokenType, TokenType.AND)
+    assertEquals(right.right.asInstanceOf[LiteralExpr].value, Some(true))
+    val left = right.left.asInstanceOf[LogicExpr]
+    assertEquals(left.operator.tokenType, TokenType.AND)
+    assertEquals(left.left.asInstanceOf[LiteralExpr].value, Some(true))
+    assertEquals(left.right.asInstanceOf[LiteralExpr].value, Some(false))
+
+  test("'or' is left-associative: a or b or c == (a or b) or c"):
+    val expr = parseExpr("false or false or true")
+    assert(expr.isInstanceOf[LogicExpr])
+    val right = expr.asInstanceOf[LogicExpr]
+    assertEquals(right.operator.tokenType, TokenType.OR)
+    assertEquals(right.right.asInstanceOf[LiteralExpr].value, Some(true))
+    val left = right.left.asInstanceOf[LogicExpr]
+    assertEquals(left.operator.tokenType, TokenType.OR)
+
+  test("equality has higher precedence than 'and': a == b and c == (a == b) and c"):
+    // grammar order: logicOr -> logicAnd -> equality, so equality binds tighter
+    // true == true and false  ->  (true == true) and false
+    val expr = parseExpr("true == true and false")
+    assert(expr.isInstanceOf[LogicExpr])
+    val and = expr.asInstanceOf[LogicExpr]
+    assertEquals(and.operator.tokenType, TokenType.AND)
+    assertEquals(and.right.asInstanceOf[LiteralExpr].value, Some(false))
+    assert(and.left.isInstanceOf[BinaryExpr])
+    assertEquals(and.left.asInstanceOf[BinaryExpr].operator.tokenType, TokenType.EQUAL_EQUAL)
+
+  test("logical operators work with grouped expressions"):
+    val expr = parseExpr("(1 == 1) and (2 == 2)")
+    assert(expr.isInstanceOf[LogicExpr])
+    val logic = expr.asInstanceOf[LogicExpr]
+    assertEquals(logic.operator.tokenType, TokenType.AND)
+    assert(logic.left.isInstanceOf[GroupingExpr])
+    assert(logic.right.isInstanceOf[GroupingExpr])
+
+  test("'!expr and ...' — unary binds tighter than 'and'"):
+    val expr = parseExpr("!true and false")
+    assert(expr.isInstanceOf[LogicExpr])
+    val logic = expr.asInstanceOf[LogicExpr]
+    assertEquals(logic.operator.tokenType, TokenType.AND)
+    assert(logic.left.isInstanceOf[UnaryExpr])
+    assertEquals(logic.left.asInstanceOf[UnaryExpr].operator.tokenType, TokenType.BANG)
 
