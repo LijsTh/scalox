@@ -20,18 +20,21 @@ class Scalox(val mode: Option[Mode] = None):
             tokens.foreach(Logger.output)
             return
 
-        if mode == Some(Mode.Parsing) then
-            val parser = Parser(tokens)
-            try
-                val expr = parser.parse()
-                Logger.output(expr.toString)
+        val parsed = 
+            try Parser(tokens).parse()
             catch
                 case NonFatal(e) =>
                     Logger.error(s"Parsing Error: ${e.getMessage}")
-            return
+                    return
 
-        // TODO: parse + interpret
-        Logger.warn("Not implemented yet.")
+        if mode == Some(Mode.Parsing) then
+            Logger.output(parsed.toString)
+            return
+        
+        val interpreter = Interpreter()
+        interpreter.interpret(parsed)
+
+
 
     def runFile(path: String): Unit =
         try
