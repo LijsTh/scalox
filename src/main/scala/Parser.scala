@@ -19,6 +19,8 @@ class Parser(private val tokens: Array[Token]):
             case TokenType.PRINT       => consume(); printStatement()
             case TokenType.LEFT_BRACE  => consume(); blockStatement()
             case TokenType.VAR         => consume(); variableDeclaration()
+            case TokenType.FUN         => consume(); funDeclStmt()
+            case TokenType.RETURN      => consume(); returnStatement()
             case TokenType.IF          => consume(); ifStatement()
             case TokenType.WHILE       => consume(); whileStatement()
             case TokenType.FOR         => consume(); forStatement()
@@ -133,6 +135,46 @@ class Parser(private val tokens: Array[Token]):
             BlockStmt(ArrayBuffer(init, body))
         )
 
+    def funDeclStmt(): FunDecl = 
+        val name = tryConsume(TokenType.IDENTIFIER).getOrElse(
+            throw new RuntimeException(s"Expected function name, got '${peek()}'")
+        )
+        tryConsume(TokenType.LEFT_PAREN).getOrElse(
+            throw new RuntimeException(s"Expected '(' after function name, got '${peek()}'")
+        )
+
+        val params = ArrayBuffer[Token]()
+        if !check(TokenType.RIGHT_PAREN) then
+            params += tryConsume(TokenType.IDENTIFIER).getOrElse(
+                throw new RuntimeException(s"Expected parameter name, got '${peek()}'")
+            )
+            while tryConsume(TokenType.COMMA).isDefined do
+                params += tryConsume(TokenType.IDENTIFIER).getOrElse(
+                    throw new RuntimeException(s"Expected parameter name after ',', got '${peek()}'")
+                )
+
+        tryConsume(TokenType.RIGHT_PAREN).getOrElse(
+            throw new RuntimeException(s"Expected ')' after function parameters, got '${peek()}'")
+        )
+
+        tryConsume(TokenType.LEFT_BRACE).getOrElse(
+            throw new RuntimeException(s"Expected '{' before function body, got '${peek()}'")
+        )
+
+        val body = block()
+        FunDecl(name, params.toArray, body)
+
+    def returnStatement(): ReturnStmt =
+        val value =
+            if check(TokenType.SEMICOLON) then None
+            else Some(expression())
+
+        tryConsume(TokenType.SEMICOLON).getOrElse(
+            throw new RuntimeException(s"Expected ';' after return value, got '${peek().lexeme}'")
+        )
+
+        ReturnStmt(value)
+
     // EXPRESSIONS ------------------------------------------------ 
 
     def expression(): Expr = assignment()
@@ -172,7 +214,25 @@ class Parser(private val tokens: Array[Token]):
     def unary(): Expr = 
         tryConsume(TokenType.BANG, TokenType.MINUS) match
             case Some(operator) => UnaryExpr(operator, unary())
-            case None => primary()
+            case None => call()
+
+    // Call expressions: primary "(" arguments? ")" || Primary expressions 
+    def call(): Expr = 
+        var expr = primary()
+        
+        // Supports chained function calls like: foo()(1)
+        while tryConsume(TokenType.LEFT_PAREN).isDefined do
+            val arguments = ArrayBuffer[Expr]()
+            if !check(TokenType.RIGHT_PAREN) then
+                arguments += expression()
+                while tryConsume(TokenType.COMMA).nonEmpty do
+                    arguments += expression()
+            
+            tryConsume(TokenType.RIGHT_PAREN).getOrElse(
+                throw new RuntimeException(s"Expected ')' after arguments, got '${peek().lexeme}'")
+            )
+            expr = CallExpr(expr, arguments.toList)
+        expr
 
     // Primary expressions: NUMBER, STRING, TRUE, FALSE, NIL, and parenthesized expressions
     def primary (): Expr = 

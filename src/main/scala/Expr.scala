@@ -5,6 +5,9 @@ enum Expr:
     // UNARY: "-" | "!" | expression 
     case UnaryExpr(operator: Token, right: Expr)
 
+    // CALL: primary "(" arguments? ")"
+    case CallExpr(callee: Expr, arguments: List[Expr])
+
     // BINARY: expression operator expression
     // operator can be: "+" | "-" | "*" | "/" | "==" | "!=" | "<" | "<=" | ">" | ">="
     case BinaryExpr(left: Expr, operator: Token, right: Expr)
@@ -30,6 +33,9 @@ enum Expr:
                     case Some(b: Boolean) => if b then "<TRUE>" else "<FALSE>"
                     case None  => "<NIL>"
             case UnaryExpr(operator, right) => s"(${operator.lexeme} ${right.toString})"
+            case CallExpr(callee, arguments) => 
+                val argsStr = arguments.map(_.toString).mkString(", ") 
+                s"${callee.toString}($argsStr)"
             case BinaryExpr(left, operator, right) => s"(${left.toString} ${operator.lexeme} ${right.toString})"
             case GroupingExpr(expression) => s"(${expression.toString})"
             case VariableExpr(name) => s"<${name.lexeme}>"

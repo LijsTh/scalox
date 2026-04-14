@@ -1,4 +1,5 @@
 import scala.collection.mutable.ArrayBuffer
+
 enum Stmt:
     // expressions like : 2;
     case ExpressionStmt(expr: Expr)
@@ -8,6 +9,11 @@ enum Stmt:
 
     // variable declaration statements like: var x = 2;
     case VarDecl(name: String, initializer: Option[Expr])
+
+    // function declaration statements like: fun add(a, b) { return a + b; }
+    case FunDecl(name: Token , params: Array[Token], body: ArrayBuffer[Stmt])
+
+    case ReturnStmt(value: Option[Expr])
 
     // block statements like: { print 1; print 2; }
     case BlockStmt(statements: ArrayBuffer[Stmt])
@@ -23,8 +29,10 @@ enum Stmt:
             case ExpressionStmt(expr) => s"(${expr.toString})"
             case PrintStmt(expr) => s"PRINT (${expr.toString})"
             case VarDecl(name, initializer) => s"VAR $name = ${initializer.map(_.toString).getOrElse("NIL")}"
+            case FunDecl(name, params, body) => 
+                s"FUN ${name.lexeme}(${params.map(_.lexeme).mkString(", ")}) { ${body.map(_.toString).mkString(" ")} }"
+            case ReturnStmt(value) => s"RETURN ${value.map(_.toString).getOrElse("NIL")}"
             case BlockStmt(statements) => s"{ ${statements.map(_.toString).mkString(" ")} }"
             case IfStmt(condition, thenBranch, elseBranch) => 
                 s"IF (${condition.toString}) THEN ${thenBranch.toString} ELSE ${elseBranch.map(_.toString).getOrElse("NIL")}"
             case WhileStmt(condition, body) => s"WHILE (${condition.toString}) ${body.toString}"
-

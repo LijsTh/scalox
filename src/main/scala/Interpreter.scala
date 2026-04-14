@@ -21,7 +21,8 @@ class Interpreter(globalEnv: Env = new Env()):
             case BlockStmt(statements) => executeBlockStmt(BlockStmt(statements))
             case IfStmt(condition, thenBranch, elseBranch) => executeIfStmt(IfStmt(condition, thenBranch, elseBranch))
             case WhileStmt(condition, body) => executeWhileStmt(WhileStmt(condition, body))
-
+            case FunDecl(name, params, body) => executeFunctionDeclaration(FunDecl(name, params, body))
+            case ReturnStmt(value) => executeReturn(ReturnStmt(value))
 
     def executeExpression(stmt: ExpressionStmt): Unit = 
         evaluate(stmt.expr)
@@ -56,6 +57,14 @@ class Interpreter(globalEnv: Env = new Env()):
     def executeWhileStmt(stmt: WhileStmt): Unit = 
         while isTruthy(evaluate(stmt.condition)) do
             execute(stmt.body)
+
+    def executeFunctionDeclaration(stmt: FunDecl): Unit = 
+        val function = Function(stmt, currentEnv)
+        currentEnv.define(stmt.name.lexeme, function)
+
+    def executeReturn(stmt: ReturnStmt): Unit =
+        val value = stmt.value.map(evaluate).getOrElse(null)
+        throw ReturnException(value)
     
 
     // EXPRESSIONS EVALUATIONS ------------------------------------------------
@@ -69,6 +78,7 @@ class Interpreter(globalEnv: Env = new Env()):
             case variable: VariableExpr => evaluateVariable(variable)
             case assignment: AssignmentExpr => evaluateVariableAssignment(assignment)
             case logic: LogicExpr => evaluateLogic(logic)
+            case call: CallExpr => evaluateCall(call)
             case null => throw new RuntimeException(s"Unknown expression type: ${expr.getClass.getSimpleName}")
 
     private def evaluateLiteral(literal: LiteralExpr): Any =
@@ -160,6 +170,17 @@ class Interpreter(globalEnv: Env = new Env()):
             case _ => throw new RuntimeException(s"Unknown logical operator: ${logic.operator.lexeme}")
 
         if shortCircuit then left else evaluate(logic.right)
+
+    def evaluateCall(call: CallExpr): Any = 
+        val callee = evaluate(call.callee) 
+        val arguments = call.arguments.map(evaluate)
+
+        callee match
+            case function: Callable =>
+                if arguments.length != function.arity then
+                    throw new RuntimeException(s"Expected ${function.arity} arguments but got ${arguments.length}.")
+                function.apply(this, arguments)
+            case _ => throw new RuntimeException("Can only call functions and classes.")
 
     // HELPER METHODS ---------------------------------------------------------------       
     private def isTruthy(value: Any): Boolean =
