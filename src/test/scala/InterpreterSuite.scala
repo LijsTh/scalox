@@ -549,3 +549,621 @@ class InterpreterSuite extends munit.FunSuite:
       runProgram("{ var y = 2; } print y;")
     }
     assert(clue(ex.getMessage).contains("Undefined variable 'y'"))
+
+  // ─── Functions: basic declaration and calling ────────────────────────
+
+  test("function declaration and call with return value"):
+    val out = runProgramAndCaptureStdOut(
+      "fun returnthree() { return 3; } print returnthree();"
+    )
+    assertEquals(out.trim, "3.0")
+
+  test("printing a function shows its representation"):
+    val out = runProgramAndCaptureStdOut(
+      "fun returnthree() { return 3; } print returnthree;"
+    )
+    assert(out.trim.contains("fn"))
+    assert(out.trim.contains("returnthree"))
+
+  test("function without return statement returns nil"):
+    val out = runProgramAndCaptureStdOut(
+      "fun noreturn() { } print noreturn();"
+    )
+    assertEquals(out.trim, "null")
+
+  test("function with empty return returns nil"):
+    val out = runProgramAndCaptureStdOut(
+      "fun emptyreturn() { return; } print emptyreturn();"
+    )
+    assertEquals(out.trim, "null")
+
+  test("function with body but no explicit return returns nil"):
+    val out = runProgramAndCaptureStdOut(
+      "fun greet() { var x = 1; var y = 2; } print greet();"
+    )
+    assertEquals(out.trim, "null")
+
+  // ─── Functions: parameters and arguments ─────────────────────────────
+
+  test("function with one parameter"):
+    val out = runProgramAndCaptureStdOut(
+      "fun double(n) { return n * 2; } print double(5);"
+    )
+    assertEquals(out.trim, "10.0")
+
+  test("function with multiple parameters"):
+    val out = runProgramAndCaptureStdOut(
+      "fun add(a, b, c) { return a + b + c; } print add(1, 2, 3);"
+    )
+    assertEquals(out.trim, "6.0")
+
+  test("function parameters are local to the function"):
+    val out = runProgramAndCaptureStdOut(
+      """var a = "global";
+        |fun f(a) { print a; }
+        |f("local");
+        |print a;""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("local", "global"))
+
+  test("function parameters shadow outer variables"):
+    val out = runProgramAndCaptureStdOut(
+      "var x = 10; fun f(x) { return x + 1; } print f(20);"
+    )
+    assertEquals(out.trim, "21.0")
+
+  // ─── Functions: arity errors ─────────────────────────────────────────
+
+  test("too many arguments throws error"):
+    val ex = intercept[RuntimeException] {
+      runProgram("fun add(a, b, c) { return a + b + c; } add(1,2,3,4);")
+    }
+    assert(ex.getMessage.contains("Expected 3 arguments but got 4"))
+
+  test("too few arguments throws error"):
+    val ex = intercept[RuntimeException] {
+      runProgram("fun add(a, b, c) { return a + b + c; } add(1,2);")
+    }
+    assert(ex.getMessage.contains("Expected 3 arguments but got 2"))
+
+  test("zero-arg function called with arguments throws error"):
+    val ex = intercept[RuntimeException] {
+      runProgram("fun f() { return 1; } f(42);")
+    }
+    assert(ex.getMessage.contains("Expected 0 arguments but got 1"))
+
+  // ─── Functions: calling non-callable values ──────────────────────────
+
+  test("calling a string throws error"):
+    val ex = intercept[RuntimeException] {
+      runProgram("var x = \"x\"; x();")
+    }
+    assert(ex.getMessage.contains("Can only call functions and classes"))
+
+  test("calling a number throws error"):
+    val ex = intercept[RuntimeException] {
+      runProgram("var x = 42; x();")
+    }
+    assert(ex.getMessage.contains("Can only call functions and classes"))
+
+  test("calling nil throws error"):
+    val ex = intercept[RuntimeException] {
+      runProgram("var x = nil; x();")
+    }
+    assert(ex.getMessage.contains("Can only call functions and classes"))
+
+  test("calling a boolean throws error"):
+    val ex = intercept[RuntimeException] {
+      runProgram("var x = true; x();")
+    }
+    assert(ex.getMessage.contains("Can only call functions and classes"))
+
+  // ─── Functions: return statement behavior ────────────────────────────
+
+  test("return exits function early"):
+    val out = runProgramAndCaptureStdOut(
+      """fun f() {
+        |  print "before";
+        |  return;
+        |  print "after";
+        |}
+        |f();""".stripMargin
+    )
+    assertEquals(out.trim, "before")
+
+  test("return with value exits function early"):
+    val out = runProgramAndCaptureStdOut(
+      """fun f() {
+        |  return 42;
+        |  print "unreachable";
+        |}
+        |print f();""".stripMargin
+    )
+    assertEquals(out.trim, "42.0")
+
+  test("return inside if branch"):
+    val out = runProgramAndCaptureStdOut(
+      """fun abs(n) {
+        |  if (n < 0) return -n;
+        |  return n;
+        |}
+        |print abs(-5);
+        |print abs(3);""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("5.0", "3.0"))
+
+  test("return inside while loop"):
+    val out = runProgramAndCaptureStdOut(
+      """fun findFirst() {
+        |  var i = 0;
+        |  while (i < 10) {
+        |    if (i == 5) return i;
+        |    i = i + 1;
+        |  }
+        |  return -1;
+        |}
+        |print findFirst();""".stripMargin
+    )
+    assertEquals(out.trim, "5.0")
+
+  test("return string value"):
+    val out = runProgramAndCaptureStdOut(
+      """fun greeting() { return "hello"; }
+        |print greeting();""".stripMargin
+    )
+    assertEquals(out.trim, "hello")
+
+  test("return boolean value"):
+    val out = runProgramAndCaptureStdOut(
+      """fun isPositive(n) { return n > 0; }
+        |print isPositive(5);
+        |print isPositive(-3);""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("true", "false"))
+
+  // ─── Functions: first-class values ───────────────────────────────────
+
+  test("function stored in variable can be called"):
+    val out = runProgramAndCaptureStdOut(
+      """fun add(a, b) { return a + b; }
+        |var myFn = add;
+        |print myFn(3, 4);""".stripMargin
+    )
+    assertEquals(out.trim, "7.0")
+
+  test("function returned from another function (callbacks)"):
+    val out = runProgramAndCaptureStdOut(
+      """fun fn() {
+        |  print "soy un callback!";
+        |}
+        |fun get_fn() {
+        |  return fn;
+        |}
+        |get_fn()();""".stripMargin
+    )
+    assertEquals(out.trim, "soy un callback!")
+
+  test("chained function calls"):
+    val out = runProgramAndCaptureStdOut(
+      """fun makeAdder(x) {
+        |  fun adder(y) { return x + y; }
+        |  return adder;
+        |}
+        |print makeAdder(2)(3);""".stripMargin
+    )
+    assertEquals(out.trim, "5.0")
+
+  test("function passed to variable and called later"):
+    val out = runProgramAndCaptureStdOut(
+      """fun square(n) { return n * n; }
+        |var op = square;
+        |print op(4);
+        |print op(5);""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("16.0", "25.0"))
+
+  // ─── Functions: nested functions ─────────────────────────────────────
+
+  test("nested function declaration and call"):
+    val out = runProgramAndCaptureStdOut(
+      """fun nest() {
+        |  fun nested() {
+        |    print "soy una funcion interna!";
+        |  }
+        |  nested();
+        |}
+        |nest();""".stripMargin
+    )
+    assertEquals(out.trim, "soy una funcion interna!")
+
+  test("nested function can access outer function's variables"):
+    val out = runProgramAndCaptureStdOut(
+      """fun outer() {
+        |  var x = 10;
+        |  fun inner() {
+        |    print x;
+        |  }
+        |  inner();
+        |}
+        |outer();""".stripMargin
+    )
+    assertEquals(out.trim, "10.0")
+
+  test("deeply nested functions"):
+    val out = runProgramAndCaptureStdOut(
+      """fun a() {
+        |  fun b() {
+        |    fun c() {
+        |      return "deep";
+        |    }
+        |    return c();
+        |  }
+        |  return b();
+        |}
+        |print a();""".stripMargin
+    )
+    assertEquals(out.trim, "deep")
+
+  test("inner function not accessible outside outer function"):
+    val ex = intercept[RuntimeException] {
+      runProgram(
+        """fun outer() {
+          |  fun inner() { return 1; }
+          |}
+          |outer();
+          |inner();""".stripMargin
+      )
+    }
+    assert(ex.getMessage.contains("Undefined variable"))
+
+  // ─── Functions: closures ─────────────────────────────────────────────
+
+  test("closure captures enclosing variable"):
+    val out = runProgramAndCaptureStdOut(
+      """fun makeGreeter(name) {
+        |  fun greet() {
+        |    print "Hello, " + name + "!";
+        |  }
+        |  return greet;
+        |}
+        |var greeter = makeGreeter("World");
+        |greeter();""".stripMargin
+    )
+    assertEquals(out.trim, "Hello, World!")
+
+  test("closure as counter"):
+    val out = runProgramAndCaptureStdOut(
+      """fun makeCounter() {
+        |  var count = 0;
+        |  fun increment() {
+        |    count = count + 1;
+        |    return count;
+        |  }
+        |  return increment;
+        |}
+        |var counter = makeCounter();
+        |print counter();
+        |print counter();
+        |print counter();""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("1.0", "2.0", "3.0"))
+
+  test("two closures from same factory are independent"):
+    val out = runProgramAndCaptureStdOut(
+      """fun makeCounter() {
+        |  var count = 0;
+        |  fun increment() {
+        |    count = count + 1;
+        |    return count;
+        |  }
+        |  return increment;
+        |}
+        |var c1 = makeCounter();
+        |var c2 = makeCounter();
+        |print c1();
+        |print c1();
+        |print c2();""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("1.0", "2.0", "1.0"))
+
+  test("closure captures variable by reference"):
+    val out = runProgramAndCaptureStdOut(
+      """var x = "before";
+        |fun f() { print x; }
+        |f();
+        |x = "after";
+        |f();""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("before", "after"))
+
+  test("closure over function parameter"):
+    val out = runProgramAndCaptureStdOut(
+      """fun multiplier(factor) {
+        |  fun multiply(n) {
+        |    return factor * n;
+        |  }
+        |  return multiply;
+        |}
+        |var double = multiplier(2);
+        |var triple = multiplier(3);
+        |print double(5);
+        |print triple(5);""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("10.0", "15.0"))
+
+  // ─── Functions: recursion ────────────────────────────────────────────
+
+  test("recursive factorial"):
+    val out = runProgramAndCaptureStdOut(
+      """fun factorial(n) {
+        |  if (n <= 1) return 1;
+        |  return n * factorial(n - 1);
+        |}
+        |print factorial(1);
+        |print factorial(5);
+        |print factorial(6);""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("1.0", "120.0", "720.0"))
+
+  test("recursive fibonacci"):
+    val out = runProgramAndCaptureStdOut(
+      """fun fib(n) {
+        |  if (n <= 1) return n;
+        |  return fib(n - 1) + fib(n - 2);
+        |}
+        |print fib(0);
+        |print fib(1);
+        |print fib(2);
+        |print fib(5);
+        |print fib(8);""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("0.0", "1.0", "1.0", "5.0", "21.0"))
+
+  test("mutual recursion"):
+    val out = runProgramAndCaptureStdOut(
+      """fun isEven(n) {
+        |  if (n == 0) return true;
+        |  return isOdd(n - 1);
+        |}
+        |fun isOdd(n) {
+        |  if (n == 0) return false;
+        |  return isEven(n - 1);
+        |}
+        |print isEven(4);
+        |print isOdd(3);""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("true", "true"))
+
+  test("recursive countdown"):
+    val out = runProgramAndCaptureStdOut(
+      """fun countdown(n) {
+        |  if (n <= 0) return;
+        |  print n;
+        |  countdown(n - 1);
+        |}
+        |countdown(3);""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("3.0", "2.0", "1.0"))
+
+  // ─── Functions: interaction with control flow ────────────────────────
+
+  test("function with if-else inside"):
+    val out = runProgramAndCaptureStdOut(
+      """fun max(a, b) {
+        |  if (a > b) return a;
+        |  else return b;
+        |}
+        |print max(3, 7);
+        |print max(10, 2);""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("7.0", "10.0"))
+
+  test("function with while loop inside"):
+    val out = runProgramAndCaptureStdOut(
+      """fun sum(n) {
+        |  var total = 0;
+        |  var i = 1;
+        |  while (i <= n) {
+        |    total = total + i;
+        |    i = i + 1;
+        |  }
+        |  return total;
+        |}
+        |print sum(5);""".stripMargin
+    )
+    assertEquals(out.trim, "15.0")
+
+  test("function with for loop inside"):
+    val out = runProgramAndCaptureStdOut(
+      """fun sumFor(n) {
+        |  var total = 0;
+        |  for (var i = 1; i <= n; i = i + 1) {
+        |    total = total + i;
+        |  }
+        |  return total;
+        |}
+        |print sumFor(10);""".stripMargin
+    )
+    assertEquals(out.trim, "55.0")
+
+  test("function called inside a loop"):
+    val out = runProgramAndCaptureStdOut(
+      """fun square(n) { return n * n; }
+        |var result = 0;
+        |for (var i = 1; i <= 3; i = i + 1) {
+        |  result = result + square(i);
+        |}
+        |print result;""".stripMargin
+    )
+    assertEquals(out.trim, "14.0")
+
+  test("function called in if condition"):
+    val out = runProgramAndCaptureStdOut(
+      """fun isPositive(n) { return n > 0; }
+        |if (isPositive(5)) print "positive";
+        |else print "non-positive";""".stripMargin
+    )
+    assertEquals(out.trim, "positive")
+
+  test("function called in while condition"):
+    val out = runProgramAndCaptureStdOut(
+      """var count = 0;
+        |fun shouldContinue() {
+        |  count = count + 1;
+        |  return count < 4;
+        |}
+        |while (shouldContinue()) {
+        |  print count;
+        |}""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("1.0", "2.0", "3.0"))
+
+  // ─── Functions: used in expressions ──────────────────────────────────
+
+  test("function return value used in arithmetic"):
+    val out = runProgramAndCaptureStdOut(
+      """fun three() { return 3; }
+        |fun four() { return 4; }
+        |print three() + four();""".stripMargin
+    )
+    assertEquals(out.trim, "7.0")
+
+  test("function return value used in comparison"):
+    val out = runProgramAndCaptureStdOut(
+      """fun getValue() { return 10; }
+        |print getValue() > 5;""".stripMargin
+    )
+    assertEquals(out.trim, "true")
+
+  test("function return value assigned to variable"):
+    val out = runProgramAndCaptureStdOut(
+      """fun compute() { return 2 * 3 + 1; }
+        |var result = compute();
+        |print result;""".stripMargin
+    )
+    assertEquals(out.trim, "7.0")
+
+  test("nested function calls as arguments"):
+    val out = runProgramAndCaptureStdOut(
+      """fun add(a, b) { return a + b; }
+        |fun double(n) { return n * 2; }
+        |print add(double(3), double(4));""".stripMargin
+    )
+    assertEquals(out.trim, "14.0")
+
+  // ─── Functions: edge cases ───────────────────────────────────────────
+
+  test("function with same name as variable shadows variable"):
+    val out = runProgramAndCaptureStdOut(
+      """var x = 10;
+        |fun x() { return 20; }
+        |print x();""".stripMargin
+    )
+    assertEquals(out.trim, "20.0")
+
+  test("function can be redefined"):
+    val out = runProgramAndCaptureStdOut(
+      """fun f() { return 1; }
+        |print f();
+        |fun f() { return 2; }
+        |print f();""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("1.0", "2.0"))
+
+  test("function with print side effect and return"):
+    val out = runProgramAndCaptureStdOut(
+      """fun sideEffect() {
+        |  print "effect";
+        |  return 42;
+        |}
+        |var r = sideEffect();
+        |print r;""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("effect", "42.0"))
+
+  test("function calling another function"):
+    val out = runProgramAndCaptureStdOut(
+      """fun add(a, b) { return a + b; }
+        |fun addThree(a, b, c) { return add(add(a, b), c); }
+        |print addThree(1, 2, 3);""".stripMargin
+    )
+    assertEquals(out.trim, "6.0")
+
+  test("function with string concatenation"):
+    val out = runProgramAndCaptureStdOut(
+      """fun fullName(first, last) { return first + " " + last; }
+        |print fullName("John", "Doe");""".stripMargin
+    )
+    assertEquals(out.trim, "John Doe")
+
+  test("multiple functions defined and called"):
+    val out = runProgramAndCaptureStdOut(
+      """fun a() { return 1; }
+        |fun b() { return 2; }
+        |fun c() { return 3; }
+        |print a() + b() + c();""".stripMargin
+    )
+    assertEquals(out.trim, "6.0")
+
+  test("function with local variables does not pollute outer scope"):
+    val out = runProgramAndCaptureStdOut(
+      """fun f() {
+        |  var local = 42;
+        |  return local;
+        |}
+        |print f();""".stripMargin
+    )
+    assertEquals(out.trim, "42.0")
+    val ex = intercept[RuntimeException] {
+      runProgram(
+        """fun f() { var local = 42; return local; }
+          |f();
+          |print local;""".stripMargin
+      )
+    }
+    assert(ex.getMessage.contains("Undefined variable"))
+
+  test("function return value used in logical expression"):
+    val out = runProgramAndCaptureStdOut(
+      """fun truthy() { return true; }
+        |fun falsy() { return false; }
+        |print truthy() and falsy();
+        |print truthy() or falsy();""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("false", "true"))
+
+  // ─── Functions: closure + recursion combined ─────────────────────────
+
+  test("closure with recursion - accumulator pattern"):
+    val out = runProgramAndCaptureStdOut(
+      """fun makeAccumulator(initial) {
+        |  var total = initial;
+        |  fun add(n) {
+        |    total = total + n;
+        |    return total;
+        |  }
+        |  return add;
+        |}
+        |var acc = makeAccumulator(0);
+        |print acc(5);
+        |print acc(3);
+        |print acc(2);""".stripMargin
+    )
+    assertEquals(out.trim.linesIterator.toList, List("5.0", "8.0", "10.0"))
+
+  test("function declaration inside block scope"):
+    val out = runProgramAndCaptureStdOut(
+      """{
+        |  fun localFn() { return 99; }
+        |  print localFn();
+        |}""".stripMargin
+    )
+    assertEquals(out.trim, "99.0")
+
+  test("function uses global variable"):
+    val out = runProgramAndCaptureStdOut(
+      """var greeting = "Hi";
+        |fun greet(name) { return greeting + ", " + name; }
+        |print greet("Alice");""".stripMargin
+    )
+    assertEquals(out.trim, "Hi, Alice")

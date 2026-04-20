@@ -1000,3 +1000,210 @@ class ParserSuite extends munit.FunSuite:
     assert(logic.left.isInstanceOf[UnaryExpr])
     assertEquals(logic.left.asInstanceOf[UnaryExpr].operator.tokenType, TokenType.BANG)
 
+  // ─── Function declarations ─────────────────────────────────────────
+
+  test("parse function declaration with no parameters"):
+    val stmts = parseProgram("fun greet() { print 1; }")
+    assertEquals(stmts.length, 1)
+    assert(stmts.head.isInstanceOf[FunDecl])
+    val fn = stmts.head.asInstanceOf[FunDecl]
+    assertEquals(fn.name.lexeme, "greet")
+    assertEquals(fn.params.length, 0)
+    assertEquals(fn.body.length, 1)
+    assert(fn.body.head.isInstanceOf[PrintStmt])
+
+  test("parse function declaration with one parameter"):
+    val stmts = parseProgram("fun double(n) { return n; }")
+    val fn = stmts.head.asInstanceOf[FunDecl]
+    assertEquals(fn.name.lexeme, "double")
+    assertEquals(fn.params.length, 1)
+    assertEquals(fn.params(0).lexeme, "n")
+
+  test("parse function declaration with multiple parameters"):
+    val stmts = parseProgram("fun add(a, b, c) { return a; }")
+    val fn = stmts.head.asInstanceOf[FunDecl]
+    assertEquals(fn.name.lexeme, "add")
+    assertEquals(fn.params.length, 3)
+    assertEquals(fn.params(0).lexeme, "a")
+    assertEquals(fn.params(1).lexeme, "b")
+    assertEquals(fn.params(2).lexeme, "c")
+
+  test("parse function with empty body"):
+    val stmts = parseProgram("fun empty() { }")
+    val fn = stmts.head.asInstanceOf[FunDecl]
+    assertEquals(fn.name.lexeme, "empty")
+    assertEquals(fn.body.length, 0)
+
+  test("parse function with multiple statements in body"):
+    val stmts = parseProgram("fun f() { var x = 1; print x; return x; }")
+    val fn = stmts.head.asInstanceOf[FunDecl]
+    assertEquals(fn.body.length, 3)
+    assert(fn.body(0).isInstanceOf[VarDecl])
+    assert(fn.body(1).isInstanceOf[PrintStmt])
+    assert(fn.body(2).isInstanceOf[ReturnStmt])
+
+  test("parse nested function declarations"):
+    val stmts = parseProgram("fun outer() { fun inner() { return 1; } }")
+    val outer = stmts.head.asInstanceOf[FunDecl]
+    assertEquals(outer.name.lexeme, "outer")
+    assertEquals(outer.body.length, 1)
+    val inner = outer.body.head.asInstanceOf[FunDecl]
+    assertEquals(inner.name.lexeme, "inner")
+
+  test("parse multiple function declarations"):
+    val stmts = parseProgram("fun a() { } fun b() { } fun c() { }")
+    assertEquals(stmts.length, 3)
+    assertEquals(stmts(0).asInstanceOf[FunDecl].name.lexeme, "a")
+    assertEquals(stmts(1).asInstanceOf[FunDecl].name.lexeme, "b")
+    assertEquals(stmts(2).asInstanceOf[FunDecl].name.lexeme, "c")
+
+  // ─── Function declaration errors ───────────────────────────────────
+
+  test("error: fun without name"):
+    val ex = intercept[RuntimeException] { parseProgram("fun () { }") }
+    assert(clue(ex.getMessage).contains("Expected function name"))
+
+  test("error: fun without '(' after name"):
+    val ex = intercept[RuntimeException] { parseProgram("fun foo { }") }
+    assert(clue(ex.getMessage).contains("Expected '('"))
+
+  test("error: fun without ')' after params"):
+    val ex = intercept[RuntimeException] { parseProgram("fun foo(a, b { }") }
+    assert(clue(ex.getMessage).contains("Expected ')'"))
+
+  test("error: fun without '{' before body"):
+    val ex = intercept[RuntimeException] { parseProgram("fun foo() return 1;") }
+    assert(clue(ex.getMessage).contains("Expected '{'"))
+
+  test("error: fun parameter not an identifier"):
+    val ex = intercept[RuntimeException] { parseProgram("fun foo(123) { }") }
+    assert(clue(ex.getMessage).contains("Expected parameter name"))
+
+  // ─── Return statements ─────────────────────────────────────────────
+
+  test("parse return with value"):
+    val stmts = parseProgram("return 42;")
+    assertEquals(stmts.length, 1)
+    assert(stmts.head.isInstanceOf[ReturnStmt])
+    val ret = stmts.head.asInstanceOf[ReturnStmt]
+    assert(ret.value.isDefined)
+    assert(ret.value.get.isInstanceOf[LiteralExpr])
+    assertEquals(ret.value.get.asInstanceOf[LiteralExpr].value, Some(42.0))
+
+  test("parse return without value"):
+    val stmts = parseProgram("return;")
+    val ret = stmts.head.asInstanceOf[ReturnStmt]
+    assertEquals(ret.value, None)
+
+  test("parse return with expression"):
+    val stmts = parseProgram("return 1 + 2;")
+    val ret = stmts.head.asInstanceOf[ReturnStmt]
+    assert(ret.value.get.isInstanceOf[BinaryExpr])
+
+  test("parse return with string"):
+    val stmts = parseProgram("return \"hello\";")
+    val ret = stmts.head.asInstanceOf[ReturnStmt]
+    assertEquals(ret.value.get.asInstanceOf[LiteralExpr].value, Some("hello"))
+
+  test("error: return without semicolon"):
+    val ex = intercept[RuntimeException] { parseProgram("return 42") }
+    assert(clue(ex.getMessage).contains("Expected ';' after return"))
+
+  // ─── Call expressions ──────────────────────────────────────────────
+
+  test("parse simple function call with no arguments"):
+    val expr = parseExpr("foo()")
+    assert(expr.isInstanceOf[CallExpr])
+    val call = expr.asInstanceOf[CallExpr]
+    assert(call.callee.isInstanceOf[VariableExpr])
+    assertEquals(call.callee.asInstanceOf[VariableExpr].name.lexeme, "foo")
+    assertEquals(call.arguments.length, 0)
+
+  test("parse function call with one argument"):
+    val expr = parseExpr("foo(1)")
+    val call = expr.asInstanceOf[CallExpr]
+    assertEquals(call.arguments.length, 1)
+    assertEquals(call.arguments.head.asInstanceOf[LiteralExpr].value, Some(1.0))
+
+  test("parse function call with multiple arguments"):
+    val expr = parseExpr("foo(1, 2, 3)")
+    val call = expr.asInstanceOf[CallExpr]
+    assertEquals(call.arguments.length, 3)
+    assertEquals(call.arguments(0).asInstanceOf[LiteralExpr].value, Some(1.0))
+    assertEquals(call.arguments(1).asInstanceOf[LiteralExpr].value, Some(2.0))
+    assertEquals(call.arguments(2).asInstanceOf[LiteralExpr].value, Some(3.0))
+
+  test("parse function call with expression arguments"):
+    val expr = parseExpr("foo(1 + 2, 3 * 4)")
+    val call = expr.asInstanceOf[CallExpr]
+    assertEquals(call.arguments.length, 2)
+    assert(call.arguments(0).isInstanceOf[BinaryExpr])
+    assert(call.arguments(1).isInstanceOf[BinaryExpr])
+
+  test("parse chained function calls"):
+    // foo()() → CallExpr(CallExpr(foo, []), [])
+    val expr = parseExpr("foo()()")
+    assert(expr.isInstanceOf[CallExpr])
+    val outer = expr.asInstanceOf[CallExpr]
+    assertEquals(outer.arguments.length, 0)
+    assert(outer.callee.isInstanceOf[CallExpr])
+    val inner = outer.callee.asInstanceOf[CallExpr]
+    assertEquals(inner.arguments.length, 0)
+    assert(inner.callee.isInstanceOf[VariableExpr])
+    assertEquals(inner.callee.asInstanceOf[VariableExpr].name.lexeme, "foo")
+
+  test("parse chained call with arguments"):
+    // foo(1)(2) → CallExpr(CallExpr(foo, [1]), [2])
+    val expr = parseExpr("foo(1)(2)")
+    val outer = expr.asInstanceOf[CallExpr]
+    assertEquals(outer.arguments.length, 1)
+    assertEquals(outer.arguments.head.asInstanceOf[LiteralExpr].value, Some(2.0))
+    val inner = outer.callee.asInstanceOf[CallExpr]
+    assertEquals(inner.arguments.length, 1)
+    assertEquals(inner.arguments.head.asInstanceOf[LiteralExpr].value, Some(1.0))
+
+  test("parse function call in expression statement"):
+    val stmts = parseProgram("foo(1, 2);")
+    assertEquals(stmts.length, 1)
+    assert(stmts.head.isInstanceOf[ExpressionStmt])
+    val expr = stmts.head.asInstanceOf[ExpressionStmt].expr
+    assert(expr.isInstanceOf[CallExpr])
+
+  test("parse function call as print argument"):
+    val stmts = parseProgram("print foo();")
+    assert(stmts.head.isInstanceOf[PrintStmt])
+    val expr = stmts.head.asInstanceOf[PrintStmt].expr
+    assert(expr.isInstanceOf[CallExpr])
+
+  test("error: function call without closing paren"):
+    val ex = intercept[RuntimeException] { parseExpr("foo(1, 2") }
+    assert(clue(ex.getMessage).contains("Expected ')'"))
+
+  // ─── Function toString ─────────────────────────────────────────────
+
+  test("toString for FunDecl"):
+    val stmts = parseProgram("fun add(a, b) { return a; }")
+    val fn = stmts.head.asInstanceOf[FunDecl]
+    val s = fn.toString
+    assert(s.contains("FUN"))
+    assert(s.contains("add"))
+    assert(s.contains("a"))
+    assert(s.contains("b"))
+
+  test("toString for ReturnStmt with value"):
+    val stmts = parseProgram("return 42;")
+    val ret = stmts.head.asInstanceOf[ReturnStmt]
+    assert(ret.toString.contains("RETURN"))
+
+  test("toString for ReturnStmt without value"):
+    val stmts = parseProgram("return;")
+    val ret = stmts.head.asInstanceOf[ReturnStmt]
+    assert(ret.toString.contains("RETURN"))
+    assert(ret.toString.contains("NIL"))
+
+  test("toString for CallExpr"):
+    val expr = parseExpr("foo(1, 2)")
+    assert(expr.toString.contains("foo"))
+    assert(expr.toString.contains("1.0"))
+    assert(expr.toString.contains("2.0"))
+
