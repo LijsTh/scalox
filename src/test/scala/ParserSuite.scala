@@ -6,12 +6,12 @@ class ParserSuite extends munit.FunSuite:
 
   // Helper: scan source and parse a single expression
   private def parseExpr(source: String): Expr =
-    val tokens = Array.from(Scanner(source).scan())
+    val tokens = ArrayBuffer.from(Scanner(source).scan())
     Parser(tokens).expression()
 
   // Helper: scan source and call parse() (top-level entry point)
   private def parseProgram(source: String): ArrayBuffer[Stmt] =
-    val tokens = Array.from(Scanner(source).scan())
+    val tokens = ArrayBuffer.from(Scanner(source).scan())
     Parser(tokens).parse()
 
   // Helper: build tokens manually (useful when scanner doesn't support a token)
@@ -399,7 +399,7 @@ class ParserSuite extends munit.FunSuite:
   // The scanner doesn't produce STAR tokens yet, so we build them by hand
 
   test("parse multiplication with manual tokens"):
-    val tokens = Array(
+    val tokens = ArrayBuffer(
       mkToken(TokenType.NUMBER, "2", Some(2.0)),
       mkToken(TokenType.STAR, "*"),
       mkToken(TokenType.NUMBER, "3", Some(3.0)),
@@ -609,7 +609,7 @@ class ParserSuite extends munit.FunSuite:
 
   test("multiplication has higher precedence than addition (manual tokens)"):
     // 1 + 2 * 3 → 1 + (2 * 3)
-    val tokens = Array(
+    val tokens = ArrayBuffer(
       mkToken(TokenType.NUMBER, "1", Some(1.0)),
       mkToken(TokenType.PLUS, "+"),
       mkToken(TokenType.NUMBER, "2", Some(2.0)),
@@ -670,7 +670,7 @@ class ParserSuite extends munit.FunSuite:
 
   test("full precedence: 1 + 2 * 3 - 4 (manual tokens)"):
     // Expected: (1 + (2 * 3)) - 4
-    val tokens = Array(
+    val tokens = ArrayBuffer(
       mkToken(TokenType.NUMBER, "1", Some(1.0)),
       mkToken(TokenType.PLUS, "+"),
       mkToken(TokenType.NUMBER, "2", Some(2.0)),
@@ -835,7 +835,7 @@ class ParserSuite extends munit.FunSuite:
 
   test("error: completely unexpected token"):
     // An EQUAL sign alone is not a valid expression start
-    val tokens = Array(
+    val tokens = ArrayBuffer(
       mkToken(TokenType.EQUAL, "="),
       mkToken(TokenType.EOF, ""),
     )

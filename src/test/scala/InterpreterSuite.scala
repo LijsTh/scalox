@@ -1,18 +1,23 @@
 import Expr.*
+import scala.collection.mutable.ArrayBuffer
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 
 class InterpreterSuite extends munit.FunSuite:
 
   private def eval(source: String): Any =
-    val tokens = Array.from(Scanner(source).scan())
+    val tokens = ArrayBuffer.from(Scanner(source).scan())
     val expr = Parser(tokens).expression()
-    Interpreter().evaluate(expr)
+    val interp = Interpreter()
+    interp.evaluate(expr)
 
   private def runProgram(source: String): Unit =
-    val tokens = Array.from(Scanner(source).scan())
+    val tokens = ArrayBuffer.from(Scanner(source).scan())
     val stmts = Parser(tokens).parse()
-    Interpreter().interpret(stmts)
+    val interp = Interpreter()
+    val resolver = Resolver(interp)
+    stmts.foreach(resolver.resolve)
+    interp.interpret(stmts)
 
   private def runProgramAndCaptureStdOut(source: String): String =
     val out = ByteArrayOutputStream()
@@ -62,39 +67,39 @@ class InterpreterSuite extends munit.FunSuite:
 
   test("var declaration and read"):
     val interp = Interpreter()
-    val stmts = Parser(Array.from(Scanner("var x = 42;").scan())).parse()
+    val stmts = Parser(ArrayBuffer.from(Scanner("var x = 42;").scan())).parse()
     interp.interpret(stmts)
-    assertEquals(interp.evaluate(Parser(Array.from(Scanner("x").scan())).expression()), 42.0)
+    assertEquals(interp.evaluate(Parser(ArrayBuffer.from(Scanner("x").scan())).expression()), 42.0)
 
   test("var declared without initializer is nil"):
     val interp = Interpreter()
-    val stmts = Parser(Array.from(Scanner("var x;").scan())).parse()
+    val stmts = Parser(ArrayBuffer.from(Scanner("var x;").scan())).parse()
     interp.interpret(stmts)
-    assertEquals(interp.evaluate(Parser(Array.from(Scanner("x").scan())).expression()), null)
+    assertEquals(interp.evaluate(Parser(ArrayBuffer.from(Scanner("x").scan())).expression()), null)
 
   test("var assignment updates value"):
     val interp = Interpreter()
-    val stmts = Parser(Array.from(Scanner("var x = 1; x = 99;").scan())).parse()
+    val stmts = Parser(ArrayBuffer.from(Scanner("var x = 1; x = 99;").scan())).parse()
     interp.interpret(stmts)
-    assertEquals(interp.evaluate(Parser(Array.from(Scanner("x").scan())).expression()), 99.0)
+    assertEquals(interp.evaluate(Parser(ArrayBuffer.from(Scanner("x").scan())).expression()), 99.0)
 
   test("reading undeclared variable throws"):
     val interp = Interpreter()
-    intercept[RuntimeException](interp.evaluate(Parser(Array.from(Scanner("z").scan())).expression()))
+    intercept[RuntimeException](interp.evaluate(Parser(ArrayBuffer.from(Scanner("z").scan())).expression()))
 
   test("assigning undeclared variable throws"):
     val interp = Interpreter()
-    val stmts = Parser(Array.from(Scanner("z = 1;").scan())).parse()
+    val stmts = Parser(ArrayBuffer.from(Scanner("z = 1;").scan())).parse()
     intercept[RuntimeException](interp.interpret(stmts))
 
   // ─── Blocks and scoping ──────────────────────────────────────────────
 
   test("block introduces new scope, inner var hidden after block"):
     val interp = Interpreter()
-    val stmts = Parser(Array.from(Scanner("var x = 1; { var x = 2; } ").scan())).parse()
+    val stmts = Parser(ArrayBuffer.from(Scanner("var x = 1; { var x = 2; } ").scan())).parse()
     interp.interpret(stmts)
     // outer x is still 1
-    assertEquals(interp.evaluate(Parser(Array.from(Scanner("x").scan())).expression()), 1.0)
+    assertEquals(interp.evaluate(Parser(ArrayBuffer.from(Scanner("x").scan())).expression()), 1.0)
 
   test("block can read outer variable"):
     val out = runProgramAndCaptureStdOut("var x = 10; { print x; }")
@@ -102,9 +107,9 @@ class InterpreterSuite extends munit.FunSuite:
 
   test("block can modify outer variable"):
     val interp = Interpreter()
-    val stmts = Parser(Array.from(Scanner("var x = 1; { x = 2; }").scan())).parse()
+    val stmts = Parser(ArrayBuffer.from(Scanner("var x = 1; { x = 2; }").scan())).parse()
     interp.interpret(stmts)
-    assertEquals(interp.evaluate(Parser(Array.from(Scanner("x").scan())).expression()), 2.0)
+    assertEquals(interp.evaluate(Parser(ArrayBuffer.from(Scanner("x").scan())).expression()), 2.0)
 
   test("block mutation is visible after block: var x = 2; { x = 3; } print x;"):
     val out = runProgramAndCaptureStdOut("var x = 2; { x = 3; } print x;")
@@ -132,10 +137,10 @@ class InterpreterSuite extends munit.FunSuite:
 
   test("var in inner block not accessible after it closes"):
     val interp = Interpreter()
-    val stmts = Parser(Array.from(Scanner("{ var inner = 7; }").scan())).parse()
+    val stmts = Parser(ArrayBuffer.from(Scanner("{ var inner = 7; }").scan())).parse()
     interp.interpret(stmts)
     intercept[RuntimeException](
-      interp.evaluate(Parser(Array.from(Scanner("inner").scan())).expression())
+      interp.evaluate(Parser(ArrayBuffer.from(Scanner("inner").scan())).expression())
     )
 
   test("var computed from expression in initializer"):
@@ -351,9 +356,11 @@ class InterpreterSuite extends munit.FunSuite:
 
   test("for loop var is scoped: i not accessible outside"):
     val interp = Interpreter()
-    val stmts = Parser(Array.from(Scanner("for (var i = 0; i < 3; i = i + 1) print i;").scan())).parse()
+    val stmts = Parser(ArrayBuffer.from(Scanner("for (var i = 0; i < 3; i = i + 1) print i;").scan())).parse()
+    val resolver = Resolver(interp)
+    stmts.foreach(resolver.resolve)
     interp.interpret(stmts)
-    intercept[RuntimeException](interp.evaluate(Parser(Array.from(Scanner("i").scan())).expression()))
+    intercept[RuntimeException](interp.evaluate(Parser(ArrayBuffer.from(Scanner("i").scan())).expression()))
 
   test("for loop computes sum 1..5"):
     val out = runProgramAndCaptureStdOut(

@@ -2,17 +2,17 @@ import Expr.*
 import Stmt.*
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.Map
+import java.util.IdentityHashMap
+import scala.jdk.CollectionConverters.*
 
 class Interpreter(globalEnv: Env = new Env()):
 
     private var currentEnv: Env = globalEnv
 
     // Interpreter knows the depth that it should resolve each variable. 
-    // Example: knowing if print x; should look for x in: 
-    // - the current scope (depth 0)
-    // - the father scope (depth 1)
-    // - the global scope (not in map)
-    private var localScopeDepths: Map[VariableExpr | AssignmentExpr, Int] = Map()
+    // Uses identity-based map so different AST nodes with the same content
+    // (e.g., two `VariableExpr("i")` at different positions) are distinct keys.
+    private val localScopeDepths: IdentityHashMap[VariableExpr | AssignmentExpr, Int] = new IdentityHashMap()
 
     // TODO: Handle null to nil (at least in prints) 
     def interpret(statements: ArrayBuffer[Stmt]): Unit = 
@@ -20,7 +20,7 @@ class Interpreter(globalEnv: Env = new Env()):
             execute(stmt)
 
     def resolveDepth(expr: VariableExpr | AssignmentExpr, depth: Int): Unit = 
-        localScopeDepths += (expr -> depth)
+        localScopeDepths.put(expr, depth)
 
     // STATEMENTS EXECUTIONS ------------------------------------------------
 
@@ -167,7 +167,7 @@ class Interpreter(globalEnv: Env = new Env()):
             case _ => throw new RuntimeException(s"Unknown binary operator: ${binary.operator}")
 
     def evaluateVariable(variable: VariableExpr): Any =
-        localScopeDepths.get(variable) match
+        Option(localScopeDepths.get(variable)) match
             case Some(depth) => 
                 currentEnv.get(variable.name.lexeme, Some(depth))
             case None => globalEnv.get(variable.name.lexeme)
@@ -175,7 +175,7 @@ class Interpreter(globalEnv: Env = new Env()):
     def evaluateVariableAssignment(assignment: AssignmentExpr): Any =
         val value = evaluate(assignment.value)
         
-        localScopeDepths.get(assignment) match
+        Option(localScopeDepths.get(assignment)) match
             case Some(depth) => 
                 currentEnv.assign(assignment.name.lexeme, value, Some(depth))
             case None => 
