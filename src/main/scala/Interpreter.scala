@@ -1,15 +1,26 @@
 import Expr.*
 import Stmt.*
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.Map
 
 class Interpreter(globalEnv: Env = new Env()):
 
     private var currentEnv: Env = globalEnv
 
+    // Interpreter knows the depth that it should resolve each variable. 
+    // Example: knowing if print x; should look for x in: 
+    // - the current scope (depth 0)
+    // - the father scope (depth 1)
+    // - the global scope (not in map)
+    private var localScopeDepths: Map[VariableExpr | AssignmentExpr, Int] = Map()
+
     // TODO: Handle null to nil (at least in prints) 
     def interpret(statements: ArrayBuffer[Stmt]): Unit = 
         for stmt <- statements do
             execute(stmt)
+
+    def resolveDepth(expr: VariableExpr | AssignmentExpr, depth: Int): Unit = 
+        localScopeDepths += (expr -> depth)
 
     // STATEMENTS EXECUTIONS ------------------------------------------------
 
@@ -156,11 +167,21 @@ class Interpreter(globalEnv: Env = new Env()):
             case _ => throw new RuntimeException(s"Unknown binary operator: ${binary.operator}")
 
     def evaluateVariable(variable: VariableExpr): Any =
-        currentEnv.get(variable.name.lexeme)
-
+        localScopeDepths.get(variable) match
+            case Some(depth) => 
+                currentEnv.get(variable.name.lexeme, Some(depth))
+            case None => globalEnv.get(variable.name.lexeme)
+                
     def evaluateVariableAssignment(assignment: AssignmentExpr): Any =
         val value = evaluate(assignment.value)
-        currentEnv.assign(assignment.name.lexeme, value)
+        
+        localScopeDepths.get(assignment) match
+            case Some(depth) => 
+                currentEnv.assign(assignment.name.lexeme, value, Some(depth))
+            case None => 
+                globalEnv.assign(assignment.name.lexeme, value)
+        
+
 
     def evaluateLogic(logic: LogicExpr): Any = 
         val left = evaluate(logic.left)

@@ -3,7 +3,7 @@ import Stmt.*
 import scala.collection.mutable.ArrayBuffer
 import scala.annotation.tailrec
 
-class Parser(private val tokens: Array[Token]):
+class Parser(private val tokens: ArrayBuffer[Token]):
     private var current: Int = 0
 
     def parse(): ArrayBuffer[Stmt] = 

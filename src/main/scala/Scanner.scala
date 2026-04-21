@@ -6,14 +6,14 @@ class Scanner(private val source: String):
     private var current: Int = 0
     private var line: Int = 1
 
-    def scan(): Array[Token] =
+    def scan(): ArrayBuffer[Token] =
         while !isAtEnd() do
             start = current
             scanToken()
         
         start = current
         addToken(TokenType.EOF)
-        tokens.toArray
+        tokens
 
     private def scanToken(): Unit =
         consume() match
@@ -91,7 +91,7 @@ class Scanner(private val source: String):
                     throw new RuntimeException(s"Invalid number format $lexeme")
                 addToken(TokenType.NUMBER, Some(lexeme.toDouble))
 
-            // Identifiers and keywords
+            // Identifiers and they keywords
             case c if isAlpha(c) =>
                 while !isAtEnd() && isAlphanumeric(peek()) do consume()
                 TokenType.keywords.get(lexeme) match
