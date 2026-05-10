@@ -14,13 +14,14 @@ class Interpreter(globalEnv: Env = new Env()):
     // (e.g., two `VariableExpr("i")` at different positions) are distinct keys.
     private val localScopeDepths: IdentityHashMap[VariableExpr | AssignmentExpr, Int] = new IdentityHashMap()
 
-    // TODO: Handle null to nil (at least in prints) 
     def interpret(statements: Seq[Stmt]): Unit = 
         for stmt <- statements do
             execute(stmt)
 
     def resolveDepth(expr: VariableExpr | AssignmentExpr, depth: Int): Unit = 
         localScopeDepths.put(expr, depth)
+
+    def getLocalScopeDepths: IdentityHashMap[VariableExpr | AssignmentExpr, Int] = localScopeDepths
 
     // STATEMENTS EXECUTIONS ------------------------------------------------
 
@@ -40,7 +41,7 @@ class Interpreter(globalEnv: Env = new Env()):
 
     def executePrint(stmt: PrintStmt): Unit = 
         val value = evaluate(stmt.expr)
-        println(value)
+        println(if value == null then "nil" else value)
 
     def executeVarDecl(stmt: VarDecl): Unit = 
         val value = stmt.initializer.map(evaluate).getOrElse(null)

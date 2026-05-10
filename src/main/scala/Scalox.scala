@@ -1,21 +1,13 @@
 import scala.io.{Source, StdIn}
 import scala.util.{Try, Using}
-
-
 import utils.Logger
-import scala.collection.mutable.ArrayBuffer
 
 enum Mode:
   case Scanning, Parsing, Resolve
 
-class Scalox(val mode: Option[Mode] = None):
+class Scalox(val mode: Option[Mode] = None, val lineByLine: Boolean = false):
   private val interpreter: Interpreter = Interpreter()
   private val resolver: Resolver = Resolver(interpreter)
-
-  def runFile(path: String): Unit =
-    readFile(path) match
-      case Right(content) => runPipeline(content)
-      case Left(error)    => Logger.error(s"File Error: $error")
 
   def runRepl(): Unit =
     Logger.success("Scalox REPL - Type 'exit' or press Ctrl+D to quit")
@@ -30,15 +22,38 @@ class Scalox(val mode: Option[Mode] = None):
         .takeWhile(!isExitCommand(_))
         .foreach(runPipeline)
     .recover:
-      case _: InterruptedException => 
-    
+      case _: InterruptedException => ()
+
+  def runFile(path: String): Unit =
+    if lineByLine then
+      runFileLineByLine(path)
+    else
+      readFile(path).foreach(runPipeline)
+
+  private def runFileLineByLine(path: String): Unit =
+    Using(Source.fromFile(path)): source =>
+      source.getLines()
+        .map(_.trim)
+        .filter(_.nonEmpty)
+        .foreach: line =>
+          println(s"${Logger.prompt}$line")
+          runPipeline(line)
+    .fold(
+      err => Logger.error(s"File Error: ${err.getMessage}"),
+      _ => ()
+    )
+
   private def runPipeline(source: String): Either[String, Unit] =
     for
       tokens     <- scanTokens(source)
-      _          <- checkAndStopAt(Mode.Scanning, tokens.foreach(Logger.output))
+      _          <- stopIf(Mode.Scanning):
+                      tokens.foreach(Logger.output)
       statements <- parseStatements(tokens)
-      _          <- checkAndStopAt(Mode.Parsing, statements.foreach(stmt => Logger.output(stmt.toString)))
-      _          <- resolveStatements(statements)
+      _          <- stopIf(Mode.Parsing):
+                      statements.foreach(stmt => Logger.output(stmt.toString))
+      _          <- stopIf(Mode.Resolve):
+                      displayDepths()
+      _          <- interpretStatements(statements)
     yield ()
 
   private def scanTokens(source: String): Either[String, Seq[Token]] =
@@ -46,13 +61,6 @@ class Scalox(val mode: Option[Mode] = None):
 
   private def parseStatements(tokens: Seq[Token]): Either[String, Seq[Stmt]] =
     tryStep("Parsing")(Parser(tokens).parse())
-
-  private def resolveStatements(statements: Seq[Stmt]): Either[String, Unit] =
-    for
-      _ <- resolveAll(statements)
-      _ <- checkAndStopAt(Mode.Resolve, displayDepths())
-      _ <- interpretStatements(statements)
-    yield ()
 
   private def resolveAll(statements: Seq[Stmt]): Either[String, Unit] =
     statements.foldLeft(Right(()): Either[String, Unit]): (acc, stmt) =>
@@ -62,29 +70,11 @@ class Scalox(val mode: Option[Mode] = None):
     tryStep("Runtime")(interpreter.interpret(statements))
 
   private def displayDepths(): Unit =
-    val depths = 
-      for
-        (scope, depth) <- resolver.scopes.zipWithIndex
-        varName <- scope.keys
-      yield varName -> depth
-    
+    val depths = resolver.scopes.zipWithIndex.flatMap: (scope, depth) =>
+      scope.keys.map(_ -> depth)
     Logger.output(s"Variable Depths: ${depths.toMap}")
 
-  private def checkAndStopAt(
-    targetMode: Mode,
-    action: => Unit
-  ): Either[String, Unit] =
-    if mode.contains(targetMode) then
-      action
-      Left("") 
-    else
-      Right(())
-
-  private def tryStep[A](stepName: String)(block: => A): Either[String, A] =
-    Try(block).toEither.left.map: e =>
-      val error = e.getMessage
-      Logger.error(s"$stepName Error: $error")
-      error
+  // HELPERS ------------------------------------------------
 
   private def readFile(path: String): Either[String, String] =
     Using(Source.fromFile(path)): source =>
@@ -92,4 +82,19 @@ class Scalox(val mode: Option[Mode] = None):
     .toEither.left.map(_.getMessage)
 
   private def isExitCommand(line: String): Boolean =
-    line.trim.toLowerCase == "exit"
+    line.trim.equalsIgnoreCase("exit") 
+
+  private def stopIf(target: Mode)(action: => Unit): Either[String, Unit] =
+    if mode.contains(target) then 
+      action
+      Left("")  // Intentional stop (not an error)
+    else 
+      Right(()) // Continue pipeline
+ 
+  private def tryStep[A](stepName: String)(block: => A): Either[String, A] =
+    Try(block).toEither.left.map: e =>
+      val error = e.getMessage
+      Logger.error(s"$stepName Error: $error")
+      error
+
+    

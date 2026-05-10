@@ -9,7 +9,9 @@ import utils.Logger
         case "--resolve"  => Mode.Resolve
     }
 
-    val scalox = Scalox(mode)
+    val lineByLine = flags.contains("--line-by-line")
+
+    val scalox = Scalox(mode, lineByLine)
 
     files.headOption match
         case Some(path) => scalox.runFile(path)
