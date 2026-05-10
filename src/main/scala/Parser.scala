@@ -3,14 +3,14 @@ import Stmt.*
 import scala.collection.mutable.ArrayBuffer
 import scala.annotation.tailrec
 
-class Parser(private val tokens: ArrayBuffer[Token]):
+class Parser(private val tokens: Seq[Token]):
     private var current: Int = 0
 
-    def parse(): ArrayBuffer[Stmt] = 
+    def parse(): Seq[Stmt] = 
         val statements = ArrayBuffer[Stmt]()
         while !isAtEnd() do 
             statements += statement()
-        statements
+        statements.toSeq
 
     // STATEMENTS ------------------------------------------------
 
@@ -31,45 +31,45 @@ class Parser(private val tokens: ArrayBuffer[Token]):
 
         tryConsume(TokenType.SEMICOLON) match
             case Some(_) => PrintStmt(value)
-            case None => throw new RuntimeException(s"Expected ';' after value to print. got '${peek().lexeme}' instead.")
+            case None => throw RuntimeException(s"Expected ';' after value to print. got '${peek().lexeme}' instead.")
 
     def expressionStatement(): ExpressionStmt = 
         val expr = expression()
 
         tryConsume(TokenType.SEMICOLON) match
             case Some(_) => ExpressionStmt(expr)
-            case None => throw new RuntimeException(s"Expected ';' after expression. got '${peek().lexeme}' instead.")
+            case None => throw RuntimeException(s"Expected ';' after expression. got '${peek().lexeme}' instead.")
 
     def blockStatement(): BlockStmt = 
         BlockStmt(block())
 
-    def block(): ArrayBuffer[Stmt] = 
+    def block(): Seq[Stmt] = 
         val statements = ArrayBuffer[Stmt]()
 
         while !check(TokenType.RIGHT_BRACE) && !isAtEnd() do 
             statements += statement()
 
         tryConsume(TokenType.RIGHT_BRACE) match
-            case Some(_) => statements
-            case None => throw new RuntimeException(s"Expected '}' after block. got '${peek().lexeme}' instead.")
+            case Some(_) => statements.toSeq
+            case None => throw RuntimeException(s"Expected '}' after block. got '${peek().lexeme}' instead.")
 
     def variableDeclaration(): VarDecl = 
         val variableName = tryConsume(TokenType.IDENTIFIER).getOrElse(
-            throw new RuntimeException(s"Expected variable name, got '${peek().lexeme}'")
+            throw RuntimeException(s"Expected variable name, got '${peek().lexeme}'")
         )
         val variableValue = tryConsume(TokenType.EQUAL).map(_ => expression())
         tryConsume(TokenType.SEMICOLON).getOrElse(
-            throw new RuntimeException(s"Expected ';' after variable declaration, got '${peek().lexeme}'")
+            throw RuntimeException(s"Expected ';' after variable declaration, got '${peek().lexeme}'")
         )
         VarDecl(variableName.lexeme, variableValue)
 
     def ifStatement(): IfStmt = 
         tryConsume(TokenType.LEFT_PAREN).getOrElse(
-            throw new RuntimeException(s"Expected '(' after 'if', got '${peek().lexeme}'")
+            throw RuntimeException(s"Expected '(' after 'if', got '${peek().lexeme}'")
         )
         val condition = expression()
         tryConsume(TokenType.RIGHT_PAREN).getOrElse(
-            throw new RuntimeException(s"Expected ')' after if condition, got '${peek().lexeme}'")
+            throw RuntimeException(s"Expected ')' after if condition, got '${peek().lexeme}'")
         )
         val thenBranch = statement()
 
@@ -79,18 +79,18 @@ class Parser(private val tokens: ArrayBuffer[Token]):
 
     def whileStatement(): WhileStmt =
         tryConsume(TokenType.LEFT_PAREN).getOrElse(
-            throw new RuntimeException(s"Expected '(' after 'while', got '${peek().lexeme}'")
+            throw RuntimeException(s"Expected '(' after 'while', got '${peek().lexeme}'")
         )
         val condition = expression()
         tryConsume(TokenType.RIGHT_PAREN).getOrElse(
-            throw new RuntimeException(s"Expected ')' after while condition, got '${peek().lexeme}'")
+            throw RuntimeException(s"Expected ')' after while condition, got '${peek().lexeme}'")
         )
         WhileStmt(condition, statement())
 
     // For statement parses a for loop and desugars it into a while loop with an optional initializer and increment expression => for (initializer; condition; increment) body  => initializer; while (condition) { body; increment }
     def forStatement(): Stmt = 
         tryConsume(TokenType.LEFT_PAREN).getOrElse(
-            throw new RuntimeException(s"Expected '(' after 'for', got '${peek().lexeme}'")
+            throw RuntimeException(s"Expected '(' after 'for', got '${peek().lexeme}'")
         )
         
         val initializer: Option[Stmt] = 
@@ -110,7 +110,7 @@ class Parser(private val tokens: ArrayBuffer[Token]):
                 expression()
         
         tryConsume(TokenType.SEMICOLON).getOrElse(
-            throw new RuntimeException(s"Expected ';' after for loop condition, got '${peek().lexeme}'")
+            throw RuntimeException(s"Expected ';' after for loop condition, got '${peek().lexeme}'")
         )
         
         val increment: Option[Expr] = 
@@ -120,49 +120,49 @@ class Parser(private val tokens: ArrayBuffer[Token]):
                 Some(expression())
         
         tryConsume(TokenType.RIGHT_PAREN).getOrElse(
-            throw new RuntimeException(s"Expected ')' after for loop clauses, got '${peek().lexeme}'")
+            throw RuntimeException(s"Expected ')' after for loop clauses, got '${peek().lexeme}'")
         )
         
         var body = statement()
         
         body = increment.fold(body)(inc => 
-            BlockStmt(ArrayBuffer(body, ExpressionStmt(inc)))
+            BlockStmt(Seq(body, ExpressionStmt(inc)))
         )
         
         body = WhileStmt(condition, body)
         
         initializer.fold(body)(init => 
-            BlockStmt(ArrayBuffer(init, body))
+            BlockStmt(Seq(init, body))
         )
 
     def funDeclStmt(): FunDecl = 
         val name = tryConsume(TokenType.IDENTIFIER).getOrElse(
-            throw new RuntimeException(s"Expected function name, got '${peek()}'")
+            throw RuntimeException(s"Expected function name, got '${peek()}'")
         )
         tryConsume(TokenType.LEFT_PAREN).getOrElse(
-            throw new RuntimeException(s"Expected '(' after function name, got '${peek()}'")
+            throw RuntimeException(s"Expected '(' after function name, got '${peek()}'")
         )
 
         val params = ArrayBuffer[Token]()
         if !check(TokenType.RIGHT_PAREN) then
             params += tryConsume(TokenType.IDENTIFIER).getOrElse(
-                throw new RuntimeException(s"Expected parameter name, got '${peek()}'")
+                throw RuntimeException(s"Expected parameter name, got '${peek()}'")
             )
             while tryConsume(TokenType.COMMA).isDefined do
                 params += tryConsume(TokenType.IDENTIFIER).getOrElse(
-                    throw new RuntimeException(s"Expected parameter name after ',', got '${peek()}'")
+                    throw RuntimeException(s"Expected parameter name after ',', got '${peek()}'")
                 )
 
         tryConsume(TokenType.RIGHT_PAREN).getOrElse(
-            throw new RuntimeException(s"Expected ')' after function parameters, got '${peek()}'")
+            throw RuntimeException(s"Expected ')' after function parameters, got '${peek()}'")
         )
 
         tryConsume(TokenType.LEFT_BRACE).getOrElse(
-            throw new RuntimeException(s"Expected '{' before function body, got '${peek()}'")
+            throw RuntimeException(s"Expected '{' before function body, got '${peek()}'")
         )
 
         val body = block()
-        FunDecl(name, params.toArray, body)
+        FunDecl(name, params.toSeq, body)
 
     def returnStatement(): ReturnStmt =
         val value =
@@ -170,7 +170,7 @@ class Parser(private val tokens: ArrayBuffer[Token]):
             else Some(expression())
 
         tryConsume(TokenType.SEMICOLON).getOrElse(
-            throw new RuntimeException(s"Expected ';' after return value, got '${peek().lexeme}'")
+            throw RuntimeException(s"Expected ';' after return value, got '${peek().lexeme}'")
         )
 
         ReturnStmt(value)
@@ -187,7 +187,7 @@ class Parser(private val tokens: ArrayBuffer[Token]):
                 case VariableExpr(name) => 
                     val value = assignment()
                     AssignmentExpr(name, value)
-                case _ => throw new RuntimeException("Invalid assignment target.")            
+                case _ => throw RuntimeException("Invalid assignment target.")            
         }.getOrElse(expr)
 
     def logicOr(): Expr = parseLogical(logicAnd, TokenType.OR)
@@ -229,7 +229,7 @@ class Parser(private val tokens: ArrayBuffer[Token]):
                     arguments += expression()
             
             tryConsume(TokenType.RIGHT_PAREN).getOrElse(
-                throw new RuntimeException(s"Expected ')' after arguments, got '${peek().lexeme}'")
+                throw RuntimeException(s"Expected ')' after arguments, got '${peek().lexeme}'")
             )
             expr = CallExpr(expr, arguments.toList)
         expr
@@ -246,10 +246,10 @@ class Parser(private val tokens: ArrayBuffer[Token]):
                 val expr = expression()
                 tryConsume(TokenType.RIGHT_PAREN) match
                     case Some(_) => GroupingExpr(expr)
-                    case None => throw new RuntimeException("Expected ')' after expression.")
+                    case None => throw RuntimeException("Expected ')' after expression.")
             case TokenType.IDENTIFIER => 
                 VariableExpr(token)
-            case _ => throw new RuntimeException(s"Expected expression, got '${token.lexeme}' instead.")
+            case _ => throw RuntimeException(s"Expected expression, got '${token.lexeme}' instead.")
 
     // HELPER METHODS 
     private def peek(): Token = 

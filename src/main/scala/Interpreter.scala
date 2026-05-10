@@ -15,7 +15,7 @@ class Interpreter(globalEnv: Env = new Env()):
     private val localScopeDepths: IdentityHashMap[VariableExpr | AssignmentExpr, Int] = new IdentityHashMap()
 
     // TODO: Handle null to nil (at least in prints) 
-    def interpret(statements: ArrayBuffer[Stmt]): Unit = 
+    def interpret(statements: Seq[Stmt]): Unit = 
         for stmt <- statements do
             execute(stmt)
 
@@ -50,7 +50,7 @@ class Interpreter(globalEnv: Env = new Env()):
         val newEnv = new Env(Some(currentEnv))
         executeBlock(stmt.statements, newEnv) 
             
-    def executeBlock(statements: ArrayBuffer[Stmt], env: Env): Unit = 
+    def executeBlock(statements: Seq[Stmt], env: Env): Unit = 
         val previousEnv = currentEnv
         try
             currentEnv = env

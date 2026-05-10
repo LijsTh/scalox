@@ -66,9 +66,11 @@ class ScannerSuite extends munit.FunSuite:
     assertEquals(
       types,
       List(
-        TokenType.PLUS_PLUS,
         TokenType.PLUS,
-        TokenType.MINUS_MINUS,
+        TokenType.PLUS,
+        TokenType.PLUS,
+        TokenType.MINUS,
+        TokenType.MINUS,
         TokenType.MINUS,
         TokenType.BANG_EQUAL,
         TokenType.BANG,

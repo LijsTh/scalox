@@ -32,12 +32,12 @@ enum Expr:
                     case Some(d: Double) => s"<$d>"
                     case Some(b: Boolean) => if b then "<TRUE>" else "<FALSE>"
                     case None  => "<NIL>"
-            case UnaryExpr(operator, right) => s"(${operator.lexeme} ${right.toString})"
+            case UnaryExpr(operator, right) => s"(${operator.tokenType} ${right.toString})"
             case CallExpr(callee, arguments) => 
-                val argsStr = arguments.map(_.toString).mkString(", ") 
-                s"${callee.toString}($argsStr)"
-            case BinaryExpr(left, operator, right) => s"(${left.toString} ${operator.lexeme} ${right.toString})"
+                val argsStr = arguments.map(_.toString).mkString(", ")
+                s"fn<${callee.toString}($argsStr)>"
+            case BinaryExpr(left, operator, right) => s"(${left.toString} ${operator.tokenType} ${right.toString})"
             case GroupingExpr(expression) => s"(${expression.toString})"
             case VariableExpr(name) => s"<${name.lexeme}>"
             case AssignmentExpr(name, value) => s"<${name.lexeme} = ${value.toString}>"
-            case LogicExpr(left, operator, right) => s"(${left.toString} ${operator.lexeme} ${right.toString})"
+            case LogicExpr(left, operator, right) => s"(${left.toString} ${operator.tokenType} ${right.toString})"

@@ -9,72 +9,59 @@ enum Mode:
   case Scanning, Parsing, Resolve
 
 class Scalox(val mode: Option[Mode] = None):
-
-  def run(source: String): Unit =
-    runPipeline(source) match
-      case Left(error) => () // Error already logged
-      case Right(_)    => () // Success
+  private val interpreter: Interpreter = Interpreter()
+  private val resolver: Resolver = Resolver(interpreter)
 
   def runFile(path: String): Unit =
     readFile(path) match
-      case Right(content) => run(content)
+      case Right(content) => runPipeline(content)
       case Left(error)    => Logger.error(s"File Error: $error")
 
   def runRepl(): Unit =
     Logger.success("Scalox REPL - Type 'exit' or press Ctrl+D to quit")
+
+    sys.addShutdownHook:
+      Logger.success("Goodbye!")
     
     Try:
       Iterator
         .continually(StdIn.readLine(Logger.prompt))
         .takeWhile(_ != null)
         .takeWhile(!isExitCommand(_))
-        .foreach(run)
+        .foreach(runPipeline)
     .recover:
-      case _: InterruptedException => println()
+      case _: InterruptedException => 
     
-    Logger.success("Goodbye!")
-
-  // Core pipeline logic
   private def runPipeline(source: String): Either[String, Unit] =
     for
       tokens     <- scanTokens(source)
       _          <- checkAndStopAt(Mode.Scanning, tokens.foreach(Logger.output))
       statements <- parseStatements(tokens)
-      _          <- checkAndStopAt(Mode.Parsing, Logger.output(statements.toString))
+      _          <- checkAndStopAt(Mode.Parsing, statements.foreach(stmt => Logger.output(stmt.toString)))
       _          <- resolveStatements(statements)
     yield ()
 
-  // Pipeline steps
-  private def scanTokens(source: String): Either[String, ArrayBuffer[Token]] =
+  private def scanTokens(source: String): Either[String, Seq[Token]] =
     tryStep("Scanning")(Scanner(source).scan())
 
-  private def parseStatements(tokens: ArrayBuffer[Token]): Either[String, ArrayBuffer[Stmt]] =
+  private def parseStatements(tokens: Seq[Token]): Either[String, Seq[Stmt]] =
     tryStep("Parsing")(Parser(tokens).parse())
 
-  private def resolveStatements(statements: ArrayBuffer[Stmt]): Either[String, Unit] =
-    val interpreter = Interpreter()
-    val resolver = Resolver(interpreter)
-    
+  private def resolveStatements(statements: Seq[Stmt]): Either[String, Unit] =
     for
-      _ <- resolveAll(resolver, statements)
-      _ <- checkAndStopAt(Mode.Resolve, displayDepths(resolver))
-      _ <- interpretStatements(interpreter, statements)
+      _ <- resolveAll(statements)
+      _ <- checkAndStopAt(Mode.Resolve, displayDepths())
+      _ <- interpretStatements(statements)
     yield ()
 
-  private def resolveAll(
-    resolver: Resolver,
-    statements: ArrayBuffer[Stmt]
-  ): Either[String, Unit] =
+  private def resolveAll(statements: Seq[Stmt]): Either[String, Unit] =
     statements.foldLeft(Right(()): Either[String, Unit]): (acc, stmt) =>
       acc.flatMap(_ => tryStep("Resolve")(resolver.resolve(stmt)))
 
-  private def interpretStatements(
-    interpreter: Interpreter,
-    statements: ArrayBuffer[Stmt]
-  ): Either[String, Unit] =
+  private def interpretStatements(statements: Seq[Stmt]): Either[String, Unit] =
     tryStep("Runtime")(interpreter.interpret(statements))
 
-  private def displayDepths(resolver: Resolver): Unit =
+  private def displayDepths(): Unit =
     val depths = 
       for
         (scope, depth) <- resolver.scopes.zipWithIndex
@@ -83,14 +70,13 @@ class Scalox(val mode: Option[Mode] = None):
     
     Logger.output(s"Variable Depths: ${depths.toMap}")
 
-  // Utilities
   private def checkAndStopAt(
     targetMode: Mode,
     action: => Unit
   ): Either[String, Unit] =
     if mode.contains(targetMode) then
       action
-      Left("") // Stop pipeline (empty error = no logging)
+      Left("") 
     else
       Right(())
 

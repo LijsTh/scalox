@@ -6,14 +6,14 @@ class Scanner(private val source: String):
     private var current: Int = 0
     private var line: Int = 1
 
-    def scan(): ArrayBuffer[Token] =
+    def scan(): Seq[Token] =
         while !isAtEnd() do
             start = current
             scanToken()
         
         start = current
         addToken(TokenType.EOF)
-        tokens
+        tokens.toSeq
 
     private def scanToken(): Unit =
         consume() match
@@ -40,33 +40,33 @@ class Scanner(private val source: String):
                 else if tryConsume('*') then
                     var level = 1
                     while level > 0 && !isAtEnd() do
-                        if tryConsume('*') && tryConsume('/') then
+                        if match2('*', '/') then
                             level -= 1
-                        else if tryConsume('/') && tryConsume('*') then
+                        else if match2('/', '*') then
                             level += 1
                         else if tryConsume('\n') then
                             line += 1
                         else
                             consume()
                     if level > 0 then
-                        throw new RuntimeException(s"Unterminated block comment at line $line")
+                        throw RuntimeException(s"Unterminated block comment at line $line")
                 else
                     addToken(TokenType.SLASH)
 
-            // Two-character operators
-            case '+' => addToken(if tryConsume('+') then TokenType.PLUS_PLUS else TokenType.PLUS)
-            case '-' => addToken(if tryConsume('-') then TokenType.MINUS_MINUS else TokenType.MINUS)
+            // Single-character operators
+            case '+' => addToken(TokenType.PLUS)
+            case '-' => addToken(TokenType.MINUS)
             case '!' => addToken(if tryConsume('=') then TokenType.BANG_EQUAL else TokenType.BANG)
             case '=' => addToken(if tryConsume('=') then TokenType.EQUAL_EQUAL else TokenType.EQUAL)
             case '<' => addToken(if tryConsume('=') then TokenType.LESS_EQUAL else TokenType.LESS)
             case '>' => addToken(if tryConsume('=') then TokenType.GREATER_EQUAL else TokenType.GREATER)
-            case '*' => addToken(if tryConsume('*') then TokenType.STAR_STAR else TokenType.STAR)
+            case '*' => addToken(TokenType.STAR)
 
             // String and char literals
             case '\'' =>
                 while !isAtEnd() && peek() != '\'' && peek() != '\n' do consume()
                 if isAtEnd() || peek() == '\n' then
-                    throw new RuntimeException(s"Unterminated string $lexeme at line $line")
+                    throw RuntimeException(s"Unterminated string $lexeme at line $line")
                 consume()
                 val value = source.substring(start + 1, current - 1)
                 addToken(TokenType.STRING, Some(value))
@@ -76,7 +76,7 @@ class Scanner(private val source: String):
                     if peek() == '\n' then line += 1
                     consume()
                 if isAtEnd() then
-                    throw new RuntimeException(s"Unterminated string at line $line")
+                    throw RuntimeException(s"Unterminated string at line $line")
                 consume()
                 val value = source.substring(start + 1, current - 1)
                 addToken(TokenType.STRING, Some(value))
@@ -88,7 +88,7 @@ class Scanner(private val source: String):
                     if peek() == '.' then scannedDots += 1
                     consume()
                 if scannedDots > 1 || previous() == '.' then
-                    throw new RuntimeException(s"Invalid number format $lexeme")
+                    throw RuntimeException(s"Invalid number format $lexeme")
                 addToken(TokenType.NUMBER, Some(lexeme.toDouble))
 
             // Identifiers and they keywords
@@ -98,7 +98,7 @@ class Scanner(private val source: String):
                     case Some(keyword) => addToken(keyword)
                     case None => addToken(TokenType.IDENTIFIER)
 
-            case c => throw new RuntimeException(s"Unexpected character '$c' at line $line")
+            case c => throw RuntimeException(s"Unexpected character '$c' at line $line")
 
     // HELPER METHODS
 
@@ -130,6 +130,14 @@ class Scanner(private val source: String):
 
     private def tryConsume(expected: Char): Boolean =
         if !isAtEnd() && peek() == expected then
+            consume()
+            true
+        else
+            false
+
+    private def match2(first: Char, second: Char): Boolean =
+        if peek() == first && peekNext() == second then
+            consume()
             consume()
             true
         else

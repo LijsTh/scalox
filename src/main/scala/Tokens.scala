@@ -14,7 +14,6 @@ enum TokenType:
          PERCENT, QUESTION, COLON
 
     // One or two character tokens.
-    case PLUS_PLUS, MINUS_MINUS, STAR_STAR
     case BANG, BANG_EQUAL
     case EQUAL, EQUAL_EQUAL
     case GREATER, GREATER_EQUAL 
@@ -66,10 +65,10 @@ case class Token(
     override def toString: String =
         (tokenType, literal) match
             case (TokenType.IDENTIFIER, _) =>
-                s"$tokenType -> $lexeme"
+                s"line $line | $tokenType -> $lexeme"
 
             case (_, Some(value)) =>
-                s"$tokenType -> $value"
+                s"line $line | $tokenType -> $value"
 
             case _ =>
-                s"$tokenType"
+                s"line $line | $tokenType"
