@@ -44,9 +44,6 @@ sbt ~run
 # Ejecutar todos los tests
 sbt test
 
-# Ejecutar un test específico
-sbt "testOnly utils.GreeterSuite"
-
 # Ejecutar tests al detectar cambios (modo watch)
 sbt ~test
 ```

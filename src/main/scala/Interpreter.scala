@@ -165,6 +165,13 @@ class Interpreter(globalEnv: Env = new Env()):
             case TokenType.BANG_EQUAL =>
                 left != right
 
+            case TokenType.PERCENT => 
+                (left, right) match
+                    case (d1: Double, d2: Double) =>
+                        if d2 == 0 then throw new RuntimeException("Division by zero.")
+                        else d1 % d2
+                    case _ => throw new RuntimeException(s"Operands must be numbers for '%' operator.")
+
             case _ => throw new RuntimeException(s"Unknown binary operator: ${binary.operator}")
 
     def evaluateVariable(variable: VariableExpr): Any =
