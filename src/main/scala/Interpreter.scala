@@ -202,7 +202,7 @@ class Interpreter(globalEnv: Env = new Env()):
                 if arguments.length != function.arity then
                     throw new RuntimeException(s"Expected ${function.arity} arguments but got ${arguments.length}.")
                 function.apply(this, arguments)
-            case _ => throw new RuntimeException("Can only call functions and classes.")
+            case _ => throw new RuntimeException("Can only call functions.")
 
     // HELPER METHODS ---------------------------------------------------------------       
     private def isTruthy(value: Any): Boolean =

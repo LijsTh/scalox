@@ -51,6 +51,7 @@ class Scalox(val mode: Option[Mode] = None, val lineByLine: Boolean = false):
       statements <- parseStatements(tokens)
       _          <- stopIf(Mode.Parsing):
                       statements.foreach(stmt => Logger.output(stmt.toString))
+      _          <- resolveAll(statements)
       _          <- stopIf(Mode.Resolve):
                       displayDepths()
       _          <- interpretStatements(statements)
@@ -70,10 +71,18 @@ class Scalox(val mode: Option[Mode] = None, val lineByLine: Boolean = false):
     tryStep("Runtime")(interpreter.interpret(statements))
 
   private def displayDepths(): Unit =
-    val depths = resolver.scopes.zipWithIndex.flatMap: (scope, depth) =>
-      scope.keys.map(_ -> depth)
-    Logger.output(s"Variable Depths: ${depths.toMap}")
-
+    import scala.jdk.CollectionConverters.*
+    val javaMap = interpreter.getLocalScopeDepths
+    val it = javaMap.entrySet().iterator()
+    val parts = scala.collection.mutable.ArrayBuffer[String]()
+    while it.hasNext do
+      val e = it.next()
+      val token = e.getKey match
+        case Expr.VariableExpr(name)      => name
+        case Expr.AssignmentExpr(name, _) => name
+      parts += s"${token.tokenType}<${token.lexeme}>: ${e.getValue}"
+    val formatted = parts.mkString("{", ", ", "}")
+    Logger.output(s"Interpreter Locals: $formatted")
   // HELPERS ------------------------------------------------
 
   private def readFile(path: String): Either[String, String] =

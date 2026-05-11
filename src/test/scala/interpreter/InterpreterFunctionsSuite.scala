@@ -56,7 +56,7 @@ class InterpreterFunctionsSuite extends munit.FunSuite, InterpreterHelpers:
   ).foreach: (program, typeName) =>
     test(s"calling a $typeName throws"):
       val ex = intercept[RuntimeException](runProgram(program))
-      assert(ex.getMessage.contains("Can only call functions and classes"))
+      assert(ex.getMessage.contains("Can only call functions"))
 
   // ─── Return behavior ─────────────────────────────────────────────────
 
