@@ -51,6 +51,9 @@ class InterpreterExprSuite extends munit.FunSuite, InterpreterHelpers:
     ("5 * 5",   25.0),
     ("1 * 0",   0.0),
     ("8 / 2",   4.0),
+    ("4 % 3",   1.0),
+    ("10 % 4",  2.0),
+    ("8 % 2",   0.0),
   ).foreach: (expr, expected) =>
     test(s"arithmetic: $expr = $expected"):
       assertEquals(eval(expr), expected)

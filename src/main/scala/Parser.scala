@@ -206,7 +206,7 @@ class Parser(private val tokens: Seq[Token]):
     def term(): Expr = 
         parseLeftAssociative(factor, TokenType.PLUS, TokenType.MINUS)
 
-    // Factor expressions: '*' and '/' || Unary expressions
+    // Factor expressions: '*' and '/' and '%' || Unary expressions
     def factor(): Expr = 
         parseLeftAssociative(unary, TokenType.STAR, TokenType.SLASH, TokenType.PERCENT)
 

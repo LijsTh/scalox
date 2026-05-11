@@ -24,24 +24,29 @@ class Scalox(val mode: Option[Mode] = None, val lineByLine: Boolean = false):
     .recover:
       case _: InterruptedException => ()
 
+  private def readFile(path: String): Either[String, String] =
+    Using(Source.fromFile(path)): source =>
+      source.getLines().mkString("\n")
+    .toEither.left.map(_.getMessage)
+
+  private def readFileLines(path: String): Either[String, List[String]] =
+    Using(Source.fromFile(path)): source =>
+      source.getLines().map(_.trim).filter(_.nonEmpty).toList
+    .toEither.left.map(_.getMessage)
+
   def runFile(path: String): Unit =
     if lineByLine then
-      runFileLineByLine(path)
-    else
-      readFile(path).foreach(runPipeline)
-
-  private def runFileLineByLine(path: String): Unit =
-    Using(Source.fromFile(path)): source =>
-      source.getLines()
-        .map(_.trim)
-        .filter(_.nonEmpty)
-        .foreach: line =>
+      readFileLines(path).fold(
+        err => Logger.error(s"File Error: $err"),
+        lines => lines.foreach: line =>
           println(s"${Logger.prompt}$line")
           runPipeline(line)
-    .fold(
-      err => Logger.error(s"File Error: ${err.getMessage}"),
-      _ => ()
-    )
+      )
+    else
+      readFile(path).fold(
+        err => Logger.error(s"File Error: $err"),
+        content => runPipeline(content)
+      )
 
   private def runPipeline(source: String): Either[String, Unit] =
     for
@@ -84,11 +89,6 @@ class Scalox(val mode: Option[Mode] = None, val lineByLine: Boolean = false):
     val formatted = parts.mkString("{", ", ", "}")
     Logger.output(s"Interpreter Locals: $formatted")
   // HELPERS ------------------------------------------------
-
-  private def readFile(path: String): Either[String, String] =
-    Using(Source.fromFile(path)): source =>
-      source.getLines().mkString("\n")
-    .toEither.left.map(_.getMessage)
 
   private def isExitCommand(line: String): Boolean =
     line.trim.equalsIgnoreCase("exit") 

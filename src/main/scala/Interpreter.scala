@@ -6,6 +6,8 @@ import java.util.IdentityHashMap
 import scala.jdk.CollectionConverters.*
 
 class Interpreter(globalEnv: Env = new Env()):
+    // add base functions to the global environment
+    addBaseFunctions()
 
     private var currentEnv: Env = globalEnv
 
@@ -210,6 +212,14 @@ class Interpreter(globalEnv: Env = new Env()):
                     throw new RuntimeException(s"Expected ${function.arity} arguments but got ${arguments.length}.")
                 function.apply(this, arguments)
             case _ => throw new RuntimeException("Can only call functions.")
+
+    // GLOBAL BASE FUNCTIONS ------------------------------------------------------
+    private def addBaseFunctions(): Unit = 
+        globalEnv.define("clock", new Callable:
+            override def arity: Int = 0
+            override def apply(interpreter: Interpreter, arguments: List[Any]): Any =
+                System.currentTimeMillis() / 1000.0
+        )
 
     // HELPER METHODS ---------------------------------------------------------------       
     private def isTruthy(value: Any): Boolean =
